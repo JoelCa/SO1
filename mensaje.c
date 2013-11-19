@@ -95,7 +95,6 @@ void crear_colas(void)
   cerrar(mqd);
 }
 
-////
 void enviar_esp(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
 {
   Msj *msj;
@@ -110,7 +109,7 @@ void enviar_esp(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
   msj->nombre = nombre;
   msj->texto = NULL;
   enviar(mqd, (char *)msj);
-  //liberar_msj(&msj);
+  liberar_msj(&msj);
 }
 
 void enviar_espwr(mqd_t mqd, char tipo, char contador, char dato, int otrodato, char *nombre, char *texto)
@@ -149,7 +148,6 @@ Msj* recibir_esp(mqd_t mqd)
     printf("Error no es posible recibir un msj por el anillo\n");
 
   recibir(mqd, buff);
-  //printf("recibio algo\n");
   return (Msj *)buff;
 }
 

@@ -5,44 +5,44 @@
 
 //listas.c
 typedef struct archivo_ {
-    char *nombre;
-    char *texto;
-    int estado;
-    int indice;
-    int tam;
-    struct archivo_ *proximo;
+  char *nombre;
+  char *texto;
+  int estado;
+  int indice;
+  int tam;
+  struct archivo_ *proximo;
 } Archivo;
 
 typedef struct lista_ {
-    Archivo *inicio;
-    Archivo *fin;
-    int t;
-    char *cola;
-    char *anillo;
+  Archivo *inicio;
+  Archivo *fin;
+  int t;
+  char *cola;
+  char *anillo;
 } Lista;
 
 typedef struct des_{
-    char *nombre;
-    int worker_c;
-    int worker_a;
-    int fd;
-    struct des_ *proximo;
+  char *nombre;
+  int worker_c;
+  int worker_a;
+  int fd;
+  struct des_ *proximo;
 } Descriptor;
 
 typedef struct ListaDes {
-    Descriptor *inicio;
-    Descriptor *fin;
-    int t;
+  Descriptor *inicio;
+  Descriptor *fin;
+  int t;
 } ListaDes;
 
 //mensajes.c
 typedef struct msj_{
-    char tipo;
-    char contador;
-    char dato;
-    int otrodato;
-    char *nombre;
-    char *texto;
+  char tipo;
+  char contador;
+  char dato;
+  int otrodato;
+  char *nombre;
+  char *texto;
 } Msj;
 
 

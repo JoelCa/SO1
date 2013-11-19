@@ -24,7 +24,6 @@ void inicializacion (Lista *lista, char *cola, char *anillo)
 
 int ins_lista_vacia(Lista *lista, char *nombre)
 {
-  //aca se rompia, llamando al op. CRE
   Archivo *ptr = (Archivo*)malloc(sizeof(Archivo));
 
   if (ptr == NULL) {
@@ -105,9 +104,9 @@ int del_lista(Lista *lista, char *nombre)
       lista->t--;
     }
   }
-  //free(ptr->nombre);
-  //free(ptr->texto);
-  //free(ptr);
+  free(ptr->nombre);
+  free(ptr->texto);
+  free(ptr);
   return 0;
 }
 
@@ -377,7 +376,7 @@ char* concatenar_archivos(Lista *lista)
 char *cola_cadena(char *token)
 {
   char *buff;
-    char delims[] = " ";
+  char delims[] = " ";
   
   if((buff = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
         printf("error\n");

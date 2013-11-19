@@ -26,7 +26,7 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
   switch(msj->tipo) {
     case 'l': //LSD
       if((buff = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-            printf("error en la operacion LSD\n");  
+        printf("Error\n");  
       buff = concatenar_archivos(lista);
       strcat(buff, msj->nombre);
       enviar_esp(anillo, 'l', msj->contador-1, 'f', buff);
@@ -290,13 +290,8 @@ void *fs (void * arg)
   DesCola dc;
   char buff[MAXSIZE_COLA];
 
-
-  char final[33] = "caca";
-
-
   cola = lista->cola;
   anillo = lista->anillo;
-  //printf("fs: %s\n", cola);
   worker = cola[5] - '0' - 1;
 
   mqd_cola = abrir(cola);
@@ -305,12 +300,6 @@ void *fs (void * arg)
   while(1) {
     //visualizacion(lista);
     msj = recibir_esp(mqd_cola);
-    //printf("llego al worker\n");
-    //mqd_d = abrir(colas[worker+5]);
-    //enviar(mqd_d, "msj. enviado del worker\n");
-    //atributos(mqd_d,"cola del dispatcher despues del msj. del worker");
-    //printf("se envio un msj al dispatcher\n");
-
     if(msj->dato == 'm') {
       mqd_d = abrir(colas[worker+5]);
       dc.mqd_cola = mqd_cola;
@@ -320,13 +309,9 @@ void *fs (void * arg)
         case 'l': //LSD
           if((elem = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
             printf("error en la operacion LSD\n");
-		  elem = concatenar_archivos(lista);
+          elem = concatenar_archivos(lista);
           enviar_esp(mqd_anillo,'l', '5', 'f', elem);
-		  //elem[0] = 'h'; elem[1] = '\0';
-		  /*strncpy(elem,final,32);
-		  final[32] = '\0';
-		  printf("AHHHH: %s\n", elem);*/
-		  while(1) {
+          while(1) {
             msj = recibir_esp(mqd_cola);
             if(evaluar_msj(mqd_d, mqd_anillo, msj, lista, NULL))
               break;
@@ -355,9 +340,7 @@ void *fs (void * arg)
           else {
             enviar_esp(mqd_anillo,'c','5','f',msj->nombre);
             recibir_msjs(dc, lista, msj->nombre);
-            //enviar_esp(mqd_d, 'c', '0', '0', NULL);
           }
-          //printf("respondio el worker al dispatcher\n");
           break;
         case 'o': //OPN
           res = busca_lista(lista, msj->nombre);
@@ -385,11 +368,10 @@ void *fs (void * arg)
           }
           break;
         case 'r': //REA
-		  if(msj->contador -'0' == worker) {
+          if(msj->contador -'0' == worker) {
             res = busca_lista(lista, msj->nombre);
-            if(res->indice > res->tam) {
+            if(res->indice > res->tam)
               enviar_esp(mqd_d, 'r', '0', '0', NULL);
-            }
             else {
               size = MIN(msj->otrodato, res->tam - res->indice);
               if((elem = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)

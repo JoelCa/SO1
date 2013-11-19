@@ -29,9 +29,9 @@ int main()
   memset(&servaddr, 0, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
   servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-  servaddr.sin_port = htons(8001);
+  servaddr.sin_port = htons(8000);
   
-  if ( bind(list_s, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0 ) {
+  if (bind(list_s, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0 ) {
     fprintf(stderr, "ECHOSERV: Error calling bind()\n");
     return -1; 
   }
@@ -47,7 +47,7 @@ int main()
   pthread_create(&work, NULL, fs, (void *)lista5);
   printf("Servidor aceptando clientes\n");
   while (1) {
-    if ( (conn_s = accept(list_s, NULL, NULL) ) < 0 ) {
+    if ((conn_s = accept(list_s, NULL, NULL) ) < 0 ) {
       fprintf(stderr, "ECHOSERV: Error calling accept()\n");
       return -1;
     }
