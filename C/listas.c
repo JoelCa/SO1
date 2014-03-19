@@ -324,7 +324,6 @@ void imprimir_des(ListaDes *des)
 
 ////////
 
-//abre lo cerrado
 int modificar_estado(Archivo *elem)
 {
   if(elem->estado == 0) {
