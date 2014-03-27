@@ -1,154 +1,149 @@
 -module(fs).
--import(dispatcher, [inicio/1]).
--import(broadcaster, [crearBroad/0, suscribirse/0, msjSD/1, enviarMsj/1]).
+-import(dispatcher, [inicio/2]).
 -compile(export_all).
 
 main() ->
-    crearBroad(),
     P1 =spawn(?MODULE, crearfs, []),
     P2 =spawn(?MODULE, crearfs, []),
     P3 =spawn(?MODULE, crearfs, []),
     P4 =spawn(?MODULE, crearfs, []),
     P5 =spawn(?MODULE, crearfs, []),
-    register(worker1, P1),
-    register(worker2, P2),
-    register(worker3, P3),
-    register(worker4, P4),  
-    register(worker5, P5),
-    io:format("Servidor aceptando clientes\n"),
-    inicio(8000).
-
+    enviarPids([P1,P2,P3,P4,P5]),
+    inicio(8000,[{P1,0},{P2,0},{P3,0},{P4,0},{P5,0}]).
 
 crearfs() ->
-    suscribirse(),
-    fs([]).
+    receive
+        {listwork, L} ->
+            fs([],L)
+    end.
 
-fs(Buff) ->
+fs(Buff,LW) ->
     receive
         {cre,N,Pid}->
-            X = enviarMsj({msj, cre, N}),
+            X = enviarMsj({msj, cre, N, self()},LW),
             Y = lists:filter(fun(A) -> A /= false end, X),
             Z = busca(N,Buff),
             if
                 (length(Y) > 0) or Z ->
-                    Pid ! {cre, error}, fs(Buff);
+                    Pid ! {cre, error}, fs(Buff,LW);
                 true ->
-                    Pid ! {cre, ok}, fs([{{cerrado, false},{nombre, N},{data, [],[],0}}|Buff])
+                    Pid ! {cre, ok}, fs([{{cerrado, false},{nombre, N},{data, [],[],0}}|Buff],LW)
             end;
-        {msj,cre,N} -> 
+        {msj,cre,N,PW} -> 
             case busca(N,Buff) of
                 false ->
-                    msjSD(false);
+                    PW ! {rmsj, false};
                 _ ->
-                    msjSD(self())
+                    PW ! {rmsj, self()}
             end,
-            fs(Buff);
-        {lsd, Pid} ->
-            X = enviarMsj({msj, lsd}),
+            fs(Buff,LW);
+        {lsd,Pid} ->
+            X = enviarMsj({msj, lsd, self()},LW),
             Y = lists:concat([X,lists:map(fun({_,{_,A},_}) -> [$ |A] -- "\r\n" end, Buff),"\n"]),
-            Pid ! {lsd, Y}, fs(Buff);
-        {msj, lsd} ->
+            Pid ! {lsd, Y},
+            fs(Buff,LW);
+        {msj,lsd,PW} ->
             X = lists:map(fun({_,{_,A},_}) -> [$ |A] -- "\r\n" end, Buff),
             Y = lists:append(X),
-            msjSD(Y), fs(Buff);
+            PW ! {rmsj, Y}, fs(Buff,LW);
         {del,N,Pid} ->
             case bb(N,Buff) of
                 {_,error1} ->
-                    X = enviarMsj({msj, del, N}),
+                    X = enviarMsj({msj, del, N, self()},LW),
                     Y = lists:filter(fun(A) ->A /= error1 end, X),
                     case Y of
                         [] ->
-                            Pid ! {del, error1}, fs(Buff);
+                            Pid ! {del, error1}, fs(Buff,LW);
                         [Z] ->
-                            Pid ! {del, Z}, fs(Buff)
+                            Pid ! {del, Z}, fs(Buff,LW)
                     end;
                 {B,E} ->
-                    Pid ! {del, E}, fs(B)
+                    Pid ! {del, E}, fs(B,LW)
             end;
-        {msj,del,N} ->
+        {msj,del,N,PW} ->
             case bb(N,Buff) of
                 {X,ok} ->
-                    msjSD(ok), fs(X);
+                    PW ! {rmsj, ok}, fs(X,LW);
                 {_,Y} ->
-                    msjSD(Y), fs(Buff)
+                    PW ! {rmsj, Y}, fs(Buff,LW)
             end;
         {opn,N,M,Pid} ->
             case abrir(N,M,Pid,Buff) of
                 {_, error1}->      
-                    X = enviarMsj({msj,opn,N,M,Pid}),
+                    X = enviarMsj({msj,opn,N,M,Pid,self()},LW),
                     Y = lists:filter(fun(A) -> A /= error1 end, X),
                     case Y of
                         [] ->
-                            Pid ! {opn, error1}, fs(Buff);
+                            Pid ! {opn, error1}, fs(Buff,LW);
                         [P] ->
-                            Pid ! {opn, P}, fs(Buff)
+                            Pid ! {opn, P}, fs(Buff,LW)
                     end;
                 {B,E} ->
-                    Pid ! {opn, E}, fs(B)
+                    Pid ! {opn, E}, fs(B,LW)
             end;
-        {msj,opn,N,M,Pid} ->
+        {msj,opn,N,M,Pid,PW} ->
             case abrir(N,M,Pid,Buff) of
-                {B, E} -> msjSD(E), fs(B)
+                {B, E} -> PW ! {rmsj, E}, fs(B,LW)
             end;
         {wrt,N,Size,S,P,Pid} when P == self()->
             X = lists:map(fun({A,{B,C},{D,E,F,G}}) -> if C == N -> {A,{B,C},{D,E++S,F,G+Size}}; true -> {A,{B,C},{D,E,F,G}} end end, Buff),
             Pid ! {wrt, ok},
-            fs(X);
+            fs(X,LW);
         {wrt,N,Size,S,P,Pid} ->
             P ! {msj,wrt,N,Size,S,self()},
-            receive {msj, wrt, ok} -> Pid ! {wrt, ok} end, fs(Buff);
+            receive {msj, wrt, ok} -> Pid ! {wrt, ok} end, fs(Buff,LW);
         {msj,wrt,N,Size,S,Pid} ->
             X = lists:map(fun({A,{B,C},{D,E,F,G}}) -> if C == N -> {A,{B,C},{D,E++S,F,G+Size}}; true -> {A,{B,C},{D,E,F,G}} end end, Buff),
             Pid ! {msj, wrt, ok},
-            fs(X);
+            fs(X,LW);
         {rea,N,P,Size,Pid} when P == self()->
             {B,R,S} = br(N,Size,Pid,Buff),
             Pid ! {rea, R, S},
-            fs(B);
+            fs(B,LW);
         {rea,N,P,Size,Pid} ->
             P ! {msj,rea,Pid,N,Size,self()},
             receive {msj,rea,R,S} -> Pid ! {rea,R,S} end,
-            fs(Buff);
+            fs(Buff,LW);
         {msj,rea,P,N,Size,Pid} ->
             {B,R,S} = br(N,Size,P,Buff),
             Pid ! {msj,rea,R,S},
-            fs(B);
+            fs(B,LW);
         {clo,N,M,P,Pid} when P == self()->
             X = cob(N,M,Pid,Buff),
             Pid ! {clo,ok},
-            fs(X);
+            fs(X,LW);
         {clo,N,M,P,Pid} ->
             P ! {msj, clo, N, M, Pid, self()},
             receive {msj,clo,ok} -> Pid ! {clo,ok} end,
-            fs(Buff);
+            fs(Buff,LW);
         {msj,clo,N,M,P,Pid} ->
             X = cob(N,M,P,Buff),
             Pid ! {msj,clo,ok},
-            fs(X);
+            fs(X,LW);
         {rm,N,Pid} ->
             case brm(N,Buff) of
                 {_,error1} ->
-                    X = enviarMsj({msj, rm, N}),
+                    X = enviarMsj({msj, rm, N, self()},LW),
                     Y = lists:filter(fun(A) -> A /= error1 end, X),
                     case Y of
                         [] ->
-                            Pid ! {rm, error1}, fs(Buff);
+                            Pid ! {rm, error1}, fs(Buff,LW);
                         [Z] ->
-                            Pid ! {rm, Z}, fs(Buff)
+                            Pid ! {rm, Z}, fs(Buff,LW)
                     end;
                 {B,E} ->
-                    Pid ! {rm, E}, fs(B)
+                    Pid ! {rm, E}, fs(B,LW)
 
             end;
-        {msj,rm,N} ->
+        {msj,rm,N,PW} ->
             case brm(N,Buff) of
                 {B,ok} ->
-                    msjSD(ok), fs(B);
+                    PW ! {rmsj, ok}, fs(B,LW);
                 {_,Y} ->
-                    msjSD(Y), fs(Buff)
+                    PW ! {rmsj, Y}, fs(Buff,LW)
             end;
         _  -> 
-            fs(Buff)
+            fs(Buff,LW)
     end.
 
 
@@ -259,3 +254,27 @@ abrir(X,M,P,[Y|L]) ->
     case abrir(X,M,P,L) of
         {A,B} -> {[Y|A],B}
     end.
+
+                                                %enviarMsj envia la consulta M a los demas worker, y
+                                                %devuelve una lista con las respuestas
+enviarMsj(M,L) ->
+    enviarM(M,L),
+    recibirMsj(length(L)).
+
+enviarM(M,[P|L]) ->
+    P ! M,
+    enviarM(M,L);
+enviarM(_,[]) ->
+    ok.
+
+recibirMsj(0) -> [];
+recibirMsj(N) -> receive {rmsj, X} -> [X|recibirMsj(N-1)] end.
+
+enviarPids(L) -> enviarPids(L,length(L)).
+
+enviarPids(_,0) ->
+    ok;
+enviarPids(L,N) ->
+    P = lists:nth(N,L),
+    P ! {listwork, lists:filter(fun(A) -> A /= P end, L)},
+    enviarPids(L,N-1).
