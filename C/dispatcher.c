@@ -9,7 +9,7 @@
 
 int is_natural(char *to_convert);
 
-pthread_mutex_t m;
+pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 
 int fd = 1, nro_worker[5] = {1,2,3,4,5};
 char *colas[10] = {"/cola1", "/cola2", "/cola3", "/cola4", "/cola5","/cola6","/cola7","/cola8","/cola9","/cola0"};
@@ -120,6 +120,7 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
           if (((result = strtok(NULL, delims)) != NULL) && (strcmp(result, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
             enviar_esp(mqd_w,'c','0','m',result);
             msj = recibir_esp(mqd_d);
+            printf("recibio");
             switch(msj->dato) {
               case '0':
                 sprintf(buffer,"OK\n");
@@ -349,10 +350,10 @@ void *handle_client(void *arg)
       break;
     }
     buffer[res]='\0';
-    worker = respuesta(buffer, conn_s);
-    if(worker >= 0) {
+    if((worker = respuesta(buffer, conn_s)) >= 0) {
       printf("Cliente %d conectado\n",worker);
       mqd_w = abrir(colas[worker]);
+      printf("se quiere abrir la cola: %s\n", colas[worker+5]);
       mqd_d = nueva(colas[worker+5]);
       while(1) {
         res=read(conn_s,buffer,MAXSIZE_COLA);

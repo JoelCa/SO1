@@ -4,8 +4,10 @@
 #include "cabecera.h"
 
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
+#define N_WORKER 5
 
-extern char *colas[10];
+extern pthread_barrier_t barrier; 
+
 extern ListaDes *des;
 
 typedef struct des_cola {
@@ -13,6 +15,12 @@ typedef struct des_cola {
   mqd_t mqd_d;
   mqd_t mqd_anillo;
 } DesCola;
+
+//IDEA VIEJA: antes de que cada worker reciba un mensaje:
+//Abre tanto la cola del dispatcher como la cola de su vecino, y las mantiene abiertas.
+//ACTUALIZACIÓN: Ahora el worker NO crea la cola del dispatcher, solo la abre cada vez
+//que le llega un mensaje (como antes)
+//HACER: que imprima los mensajes en pantalla como la versión de erlang 
 
 void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
 {
@@ -283,23 +291,37 @@ void *fs (void * arg)
   char *cola,*anillo,*elem;
   int worker, size;
   mqd_t mqd_cola, mqd_anillo, mqd_d;
-  Lista *lista = (Lista *) arg;
   Msj *msj;
   Archivo *res;
+  //debo borrar descola
   DesCola dc;
-  char buff[MAXSIZE_COLA];
+  char buff[MAXSIZE_COLA], cola_disp[12];
+  Lista *lista;
+
+  worker = *(int *)arg;
+  printf("tenemos %d\n", worker);
+  crear_cola(worker);
+  lista = crear_lista(worker);
+  sprintf(cola_disp, "/cola%d", (worker+N_WORKER)%(2*N_WORKER));
 
   cola = lista->cola;
   anillo = lista->anillo;
-  worker = cola[5] - '0' - 1;
+  //  worker = cola[5] - '0' - 1;
+  worker--;
+  printf("tenemos luego %d\n", worker);
+
+  pthread_barrier_wait(&barrier);
 
   mqd_cola = abrir(cola);
+  //printf("worker %d activo\nabre la cola: %s\n", worker+1, cola);
   mqd_anillo = abrir(anillo);
+  printf("el worker abre la cola: %s\n", cola_disp);
 
   while(1) {
     msj = recibir_esp(mqd_cola);
+    imprimir_msj(msj);
     if(msj->dato == 'm') {
-      mqd_d = abrir(colas[worker+5]);
+      mqd_d = abrir(cola_disp);
       dc.mqd_cola = mqd_cola;
       dc.mqd_d = mqd_d;
       dc.mqd_anillo = mqd_anillo;
@@ -327,10 +349,12 @@ void *fs (void * arg)
           }
           break;
         case 'c': //CRE
+          printf("llego a CRE\n");
           if(busca_lista(lista, msj->nombre) != NULL) {
             enviar_esp(mqd_d, 'c', '0', '1', NULL);
           }
           else {
+            printf("envia al dispatcher\n");
             enviar_esp(mqd_anillo,'c','5','f',msj->nombre);
             recibir_msjs(dc, lista, msj->nombre);
           }
@@ -393,10 +417,15 @@ void *fs (void * arg)
           }
           break;
       }
-    cerrar(mqd_d);
+      cerrar(mqd_d);
     }
     else 
       reenvio_por_anillo(mqd_anillo,msj,lista,NULL);
   }
+  printf("se cierra: %s\n", cola);
   cerrar(mqd_cola);
+  //cerrar(mqd_d);
+  cerrar(mqd_anillo);
+  mq_unlink(cola_disp);
+  mq_unlink(cola);
 }

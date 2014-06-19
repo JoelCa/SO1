@@ -7,23 +7,22 @@
 #include <pthread.h>
 #include "cabecera.h"   
 
-Lista *lista1 = NULL;
-Lista *lista2 = NULL;
-Lista *lista3 = NULL;
-Lista *lista4 = NULL;
-Lista *lista5 = NULL;
+#define N_WORKER 5
+
 ListaDes *des= NULL;
+pthread_barrier_t barrier;
 
 int main()
 {
-  int list_s;
+  int i,list_s;
+  int num[5] = {1,2,3,4,5};
   long conn_s = -1;
   struct sockaddr_in servaddr;
   pthread_t work, clientes;
 
-  crear_colas();
-  crear_listas();
   crear_buff_des();
+  pthread_barrier_init(&barrier,NULL,N_WORKER);
+
   if ((list_s = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
     fprintf(stderr, "ECHOSERV: Error creating listening socket.\n");
     return -1;
@@ -31,7 +30,7 @@ int main()
   memset(&servaddr, 0, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
   servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-  servaddr.sin_port = htons(8000);
+  servaddr.sin_port = htons(8001);
   
   if (bind(list_s, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0 ) {
     fprintf(stderr, "ECHOSERV: Error calling bind()\n");
@@ -42,11 +41,8 @@ int main()
     fprintf(stderr, "ECHOSERV: Error calling listen()\n");
     return -1;													
   }
-  pthread_create(&work, NULL, fs, (void *)lista1);
-  pthread_create(&work, NULL, fs, (void *)lista2);
-  pthread_create(&work, NULL, fs, (void *)lista3);
-  pthread_create(&work, NULL, fs, (void *)lista4);
-  pthread_create(&work, NULL, fs, (void *)lista5);
+  for(i=0;i<N_WORKER;i++)
+    pthread_create(&work, NULL, fs, num+i);
   printf("Servidor aceptando clientes\n");
   while (1) {
     if ((conn_s = accept(list_s, NULL, NULL) ) < 0 ) {
@@ -57,5 +53,6 @@ int main()
   }
   pthread_join(clientes, NULL);
   close(list_s);
+  pthread_barrier_destroy(&barrier);
   return 0;
 }

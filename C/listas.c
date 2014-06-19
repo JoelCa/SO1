@@ -4,11 +4,8 @@
 #include <pthread.h>
 #include "cabecera.h"
 
-extern Lista *lista1;
-extern Lista *lista2;
-extern Lista *lista3;
-extern Lista *lista4;
-extern Lista *lista5;
+#define N_WORKER 5
+
 extern ListaDes *des;
 extern int fd;
 pthread_mutex_t m;
@@ -124,23 +121,20 @@ Archivo *busca_lista(Lista *lista, char *nombre)
 }
 
 
-void crear_listas()
+Lista *crear_lista(int n)
 {
-  if ((lista1 = (Lista *)malloc (sizeof(Lista))) == NULL)
-    printf("error al crear el buffer del worker 1\n");
-  if ((lista2 = (Lista *)malloc (sizeof(Lista))) == NULL)
-        printf("error al crear el buffer del worker 2\n");
-  if ((lista3 = (Lista *)malloc (sizeof(Lista))) == NULL)
-        printf("error al crear el buffer del worker 3\n");
-  if ((lista4 = (Lista *)malloc (sizeof(Lista))) == NULL)
-        printf("error al crear el buffer del worker 4\n");
-  if ((lista5 = (Lista *)malloc (sizeof(Lista))) == NULL)
-        printf("error al crear el buffer del worker 5\n");
-  inicializacion(lista1, "/cola1", "/cola2");
-  inicializacion(lista2, "/cola2", "/cola3");
-  inicializacion(lista3, "/cola3", "/cola4");
-  inicializacion(lista4, "/cola4", "/cola5");
-  inicializacion(lista5, "/cola5", "/cola1");
+  char *buff1, *buff2;
+  Lista *lista;
+
+  buff1 = malloc(10*sizeof(char));
+  buff2 = malloc(10*sizeof(char));
+  if ((lista = (Lista *)malloc (sizeof(Lista))) == NULL)
+    printf("error al crear el buffer del worker %d\n",n);
+  sprintf(buff1, "/cola%d", n);
+  sprintf(buff2, "/cola%d", n%N_WORKER+1);
+  //printf("tenemos en la lista de %d:\n %s\n%s\n", n, buff1, buff2);
+  inicializacion(lista, buff1, buff2);
+  return lista;
 }
 
 void imprimir_arch(Archivo *arch)

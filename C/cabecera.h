@@ -47,7 +47,7 @@ typedef struct msj_{
 
 
 //listas.c
-void crear_listas();
+Lista *crear_lista(int n);
 int ins_lista(Lista *lista, char *nombre);
 char* concatenar_archivos(Lista *lista);
 void visualizacion (Lista *lista);
@@ -66,7 +66,9 @@ char *sacar_nueva_linea(char *nombrex);
 
 
 //mensajes.c
-void crear_colas();
+//mqd_t *crear_cola(int cola);
+//mqd_t *nueva(char *nombre);
+mqd_t crear_cola(int cola);
 mqd_t nueva(char *nombre);
 mqd_t abrir(char *nombre);
 int cerrar(mqd_t cola);

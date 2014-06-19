@@ -3,11 +3,26 @@
 #include <string.h>
 #include "cabecera.h"
 
+/* mqd_t *nueva(char *nombre) */
+/* { */
+/*   struct mq_attr atributos; */
+/*   mqd_t *cola; */
+
+/*   atributos.mq_maxmsg = MAXMSG_COLA; */
+/*   atributos.mq_msgsize = MAXSIZE_COLA; */
+/*   atributos.mq_flags = 0; */
+
+/*   if ((*cola = mq_open(nombre, O_CREAT | O_RDWR, S_IRWXU, &atributos)) == (mqd_t)-1) */
+/*     perror ("mq_open"); */
+/*   return cola; */
+/* } */
+
 mqd_t nueva(char *nombre)
 {
   struct mq_attr atributos;
   mqd_t cola;
 
+  printf("se crea la cola: %s\n", nombre);
   atributos.mq_maxmsg = MAXMSG_COLA;
   atributos.mq_msgsize = MAXSIZE_COLA;
   atributos.mq_flags = 0;
@@ -66,31 +81,18 @@ int atributos(mqd_t cola, char *nombre)
   return 0;
 }
 
-void crear_colas(void)
+mqd_t crear_cola(int cola)
 {
   mqd_t mqd;
-
-  mq_unlink("/cola1");
-  mq_unlink("/cola2");
-  mq_unlink("/cola3");
-  mq_unlink("/cola4");
-  mq_unlink("/cola5");
-  mq_unlink("/cola6");
-  mq_unlink("/cola7");
-  mq_unlink("/cola8");
-  mq_unlink("/cola9");
-  mq_unlink("/cola0");
-
-  mqd = nueva("/cola1");
+  char *buff;
+  
+  buff = malloc(10*sizeof(char));
+  sprintf(buff, "/cola%d", cola);
+  //printf("creacion de la cola:  %s\n", buff);
+  mq_unlink(buff);
+  mqd = nueva(buff);
   cerrar(mqd);
-  mqd = nueva("/cola2");
-  cerrar(mqd);
-  mqd = nueva("/cola3");
-  cerrar(mqd);
-  mqd = nueva("/cola4");
-  cerrar(mqd);
-  mqd = nueva("/cola5");
-  cerrar(mqd);
+  return mqd;
 }
 
 void enviar_esp(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
@@ -121,6 +123,41 @@ void enviar_espwr(mqd_t mqd, char tipo, char contador, char dato, int otrodato, 
   msj->nombre = nombre;
   msj->texto = texto;
   enviar(mqd, (char *)msj);
+}
+
+void enviar_iniciar_cola(char *cola, char tipo, char contador, char dato, char *nombre)
+{
+  Msj *msj;
+  mqd_t mqd_d;
+
+  if((msj = (Msj *)malloc(sizeof(Msj))) == NULL)
+    printf("Error al enviar mensaje\n");
+  mqd_d = abrir(cola);
+  msj->tipo = tipo;
+  msj->contador = contador;
+  msj->dato = dato;
+  msj->otrodato = '0';
+  msj->nombre = nombre;
+  msj->texto = NULL;
+  enviar(mqd_d, (char *)msj);
+  free(msj);
+  cerrar(mqd_d);
+}
+
+void enviar_iniciar_cola_wr(char *cola, char tipo, char contador, char dato, int otrodato, char *nombre, char *texto)
+{
+  Msj *msj = (Msj *)malloc(sizeof(Msj));
+  mqd_t mqd_d;
+
+  mqd_d = abrir(cola);
+  msj->tipo = tipo;
+  msj->contador = contador;
+  msj->dato = dato;
+  msj->otrodato = otrodato;
+  msj->nombre = nombre;
+  msj->texto = texto;
+  enviar(mqd_d, (char *)msj);
+  cerrar(mqd_d);
 }
 
 void reenvio_msj(mqd_t mqd, Msj *msj, char tipo)
