@@ -25,24 +25,28 @@ int main(int argc, char **argv)
   int port;
 
 
-  if(argc != 2) {
+  if(argc > 2) {
     printf("servidor: error argumento incorrecto\n");
     return -1;
   }
 
-  errno = 0;
-  port = strtol (argv[1],&pEnd,10);
+  if(argc == 2) {
+    errno = 0;
+    port = strtol (argv[1],&pEnd,10);
 
-  if((errno == ERANGE && (port == LONG_MAX || port == LONG_MIN))
-     || (errno != 0 && port == 0)) {
-    perror("strtol");
-    return -1;
-  }
+    if((errno == ERANGE && (port == LONG_MAX || port == LONG_MIN))
+       || (errno != 0 && port == 0)) {
+      perror("strtol");
+      return -1;
+    }
 
-  if ((pEnd == argv[1]) || (port <= 0)) {
-    printf("servidor: error argumento incorrecto\n");
-    return -1;
+    if ((pEnd == argv[1]) || (port <= 0)) {
+      printf("servidor: error argumento incorrecto\n");
+      return -1;
+    }
   }
+  else
+    port = 8000;
 
   crear_buff_des();
   pthread_barrier_init(&barrier,NULL,N_WORKER);
