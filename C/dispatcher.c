@@ -351,9 +351,9 @@ void *handle_client(void *arg)
     }
     buffer[res]='\0';
     if((worker = respuesta(buffer, conn_s)) >= 0) {
-      printf("Cliente %d conectado\n",worker);
+      printf("Un nuevo cliente conectado: worker nº %d\n",worker);
       mqd_w = abrir(colas[worker]);
-      printf("se quiere abrir la cola: %s\n", colas[worker+5]);
+      //printf("se quiere abrir la cola: %s\n", colas[worker+5]);
       mqd_d = nueva(colas[worker+5]);
       while(1) {
         res=read(conn_s,buffer,MAXSIZE_COLA);
@@ -372,7 +372,7 @@ void *handle_client(void *arg)
       pthread_mutex_unlock(&m);
       cerrar(mqd_w);
       borrar(mqd_d,colas[worker+5]);
-      printf("Cliente %d desconectado\n",worker);
+      printf("Cliente desconectado: worker nº %d\n",worker);
       break;
     }
   }

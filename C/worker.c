@@ -20,7 +20,6 @@ typedef struct des_cola {
 //Abre tanto la cola del dispatcher como la cola de su vecino, y las mantiene abiertas.
 //ACTUALIZACIÓN: Ahora el worker NO crea la cola del dispatcher, solo la abre cada vez
 //que le llega un mensaje (como antes)
-//HACER: que imprima los mensajes en pantalla como la versión de erlang 
 
 void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
 {
@@ -286,6 +285,13 @@ int recibir_msjs(DesCola ds, Lista *lista, char *candidato)
   return 0;
 }
 
+//void operadorLSD(DesCola ds)
+//{
+
+//}
+
+
+
 void *fs (void * arg)
 {
   char *cola,*anillo,*elem;
@@ -299,7 +305,7 @@ void *fs (void * arg)
   Lista *lista;
 
   worker = *(int *)arg;
-  printf("tenemos %d\n", worker);
+  //printf("tenemos %d\n", worker);
   crear_cola(worker);
   lista = crear_lista(worker);
   sprintf(cola_disp, "/cola%d", (worker+N_WORKER)%(2*N_WORKER));
@@ -308,18 +314,18 @@ void *fs (void * arg)
   anillo = lista->anillo;
   //  worker = cola[5] - '0' - 1;
   worker--;
-  printf("tenemos luego %d\n", worker);
+  //printf("tenemos luego %d\n", worker);
 
   pthread_barrier_wait(&barrier);
 
   mqd_cola = abrir(cola);
   //printf("worker %d activo\nabre la cola: %s\n", worker+1, cola);
   mqd_anillo = abrir(anillo);
-  printf("el worker abre la cola: %s\n", cola_disp);
+  //printf("el worker abre la cola: %s\n", cola_disp);
 
   while(1) {
     msj = recibir_esp(mqd_cola);
-    imprimir_msj(msj);
+    //imprimir_msj(msj);
     if(msj->dato == 'm') {
       mqd_d = abrir(cola_disp);
       dc.mqd_cola = mqd_cola;
@@ -422,7 +428,7 @@ void *fs (void * arg)
     else 
       reenvio_por_anillo(mqd_anillo,msj,lista,NULL);
   }
-  printf("se cierra: %s\n", cola);
+  //printf("se cierra: %s\n", cola);
   cerrar(mqd_cola);
   //cerrar(mqd_d);
   cerrar(mqd_anillo);
