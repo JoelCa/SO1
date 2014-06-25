@@ -1,0 +1,3 @@
+Observaciones:
+
+-Cada worker crea su cola de mensajes desde el momento en que se conecta.

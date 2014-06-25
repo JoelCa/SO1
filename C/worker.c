@@ -285,11 +285,121 @@ int recibir_msjs(DesCola ds, Lista *lista, char *candidato)
   return 0;
 }
 
-//void operadorLSD(DesCola ds)
-//{
+void operadorLSD(DesCola ds, Lista *lista, Msj *msj)
+{
+  char *elem;
 
-//}
+  if((elem = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
+    printf("Error\n");
+  elem = concatenar_archivos(lista);
+  enviar_esp(ds.mqd_anillo,'l', '5', 'f', elem);
+  recibir_msjs(ds, lista, NULL);
+}
 
+void operadorDEL(DesCola ds, Lista *lista, Msj *msj)
+{
+  Archivo *res;
+
+  res = busca_lista(lista, msj->nombre);
+  if(res != NULL) {
+    if(res->estado == 0) {
+      del_lista(lista, msj->nombre);
+      enviar_esp(ds.mqd_d, 'd', '0', '0', NULL);
+    }
+    else
+      enviar_esp(ds.mqd_d, 'd', '0', 'e', NULL);
+  }
+  else {
+    enviar_esp(ds.mqd_anillo,'d','5','f',msj->nombre);
+    recibir_msjs(ds, lista, NULL);
+  }
+}
+
+void operadorCRE(DesCola ds, Lista *lista, Msj *msj)
+{
+  if(busca_lista(lista, msj->nombre) != NULL) {
+    enviar_esp(ds.mqd_d, 'c', '0', '1', NULL);
+  }
+  else {
+    enviar_esp(ds.mqd_anillo,'c','5','f',msj->nombre);
+    recibir_msjs(ds, lista, msj->nombre);
+  }
+}
+
+void operadorOPN(DesCola ds, Lista *lista, Msj *msj)
+{
+  Archivo *res;
+  
+  res = busca_lista(lista, msj->nombre);
+  if(res != NULL) {
+    if(modificar_estado(res)) 
+      enviar_esp(ds.mqd_d, 'o', lista->cola[5] - 1, '0', NULL);
+    else
+      enviar_esp(ds.mqd_d, 'o', '0', '1', NULL);
+  }
+  else {
+    enviar_esp(ds.mqd_anillo,'o','5','f',msj->nombre);
+    recibir_msjs(ds, lista, NULL);
+  }
+}
+
+void operadorWRT(int worker, DesCola ds, Lista *lista, Msj *msj)
+{
+  Archivo *res;
+  
+  if(msj->contador -'0' == worker) {
+    res = busca_lista(lista, msj->nombre);
+    strcat(res->texto, msj->texto);
+    res->tam += msj->otrodato;
+    enviar_esp(ds.mqd_d, 'w', '0', '0', NULL);
+  }
+  else {
+    enviar_espwr(ds.mqd_anillo,'w','5',msj->contador, msj->otrodato, msj->nombre, msj->texto);
+    recibir_msjs(ds, lista, NULL);
+  }
+}
+
+void operadorREA(int worker, DesCola ds, Lista *lista, Msj *msj)
+{
+  Archivo *res;
+  char *elem;
+  int size;
+
+  if(msj->contador -'0' == worker) {
+    res = busca_lista(lista, msj->nombre);
+    if(res->indice > res->tam)
+      enviar_esp(ds.mqd_d, 'r', '0', '0', NULL);
+    else {
+      size = MIN(msj->otrodato, res->tam - res->indice);
+      if((elem = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
+        printf("Error\n");
+      memcpy(elem, &(res->texto)[res->indice], size);
+      elem[size] = '\0';
+      res->indice += size;
+      enviar_espwr(ds.mqd_d,'r', '0', '0', size, elem, NULL);
+    }
+  }
+  else {
+    enviar_espwr(ds.mqd_anillo,'r','5',msj->contador, msj->otrodato, msj->nombre, NULL);
+    recibir_msjs(ds, lista, NULL);
+  }
+}
+
+void operadorCLO(int worker, DesCola ds, Lista *lista, Msj *msj)
+{
+  Archivo *res;
+
+  if(msj->contador -'0' == worker) {
+    res = busca_lista(lista, msj->nombre);
+    res->estado = 0;
+    res->indice = 0;
+    enviar_esp(ds.mqd_d, 's', '0', '0', NULL);
+  }
+  else {
+    enviar_esp(ds.mqd_anillo,'s','5',msj->contador,msj->nombre);
+    recibir_msjs(ds, lista, NULL);
+  }
+}
 
 
 void *fs (void * arg)
@@ -332,95 +442,33 @@ void *fs (void * arg)
       dc.mqd_d = mqd_d;
       dc.mqd_anillo = mqd_anillo;
       switch(msj->tipo) {
+
         case 'l': //LSD
-          if((elem = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-            printf("Error\n");
-          elem = concatenar_archivos(lista);
-          enviar_esp(mqd_anillo,'l', '5', 'f', elem);
-          recibir_msjs(dc, lista, NULL);
+          operadorLSD(dc, lista, NULL);
           break;
+
         case 'd': //DEL
-          res = busca_lista(lista, msj->nombre);
-          if(res != NULL) {
-            if(res->estado == 0) {
-              del_lista(lista, msj->nombre);
-              enviar_esp(mqd_d, 'd', '0', '0', NULL);
-            }
-            else
-              enviar_esp(mqd_d, 'd', '0', 'e', NULL);
-          }
-          else {
-            enviar_esp(mqd_anillo,'d','5','f',msj->nombre);
-            recibir_msjs(dc, lista, NULL);
-          }
+          operadorDEL(dc, lista, msj);
           break;
+
         case 'c': //CRE
-          printf("llego a CRE\n");
-          if(busca_lista(lista, msj->nombre) != NULL) {
-            enviar_esp(mqd_d, 'c', '0', '1', NULL);
-          }
-          else {
-            printf("envia al dispatcher\n");
-            enviar_esp(mqd_anillo,'c','5','f',msj->nombre);
-            recibir_msjs(dc, lista, msj->nombre);
-          }
+          operadorCRE(dc, lista, msj);
           break;
+
         case 'o': //OPN
-          res = busca_lista(lista, msj->nombre);
-          if(res != NULL) {
-            if(modificar_estado(res)) 
-              enviar_esp(mqd_d, 'o', cola[5]-1, '0', NULL);
-            else
-              enviar_esp(mqd_d, 'o', '0', '1', NULL);
-          }
-          else {
-            enviar_esp(mqd_anillo,'o','5','f',msj->nombre);
-            recibir_msjs(dc, lista, NULL);
-          }
+          operadorOPN(dc, lista, msj);
           break;
+
         case 'w': //WRT
-          if(msj->contador -'0' == worker) {
-            res = busca_lista(lista, msj->nombre);
-            strcat(res->texto, msj->texto);
-            res->tam += msj->otrodato;
-            enviar_esp(mqd_d, 'w', '0', '0', NULL);
-          }
-          else {
-            enviar_espwr(mqd_anillo,'w','5',msj->contador, msj->otrodato, msj->nombre, msj->texto);
-            recibir_msjs(dc, lista, NULL);
-          }
+          operadorWRT(worker, dc, lista, msj);
           break;
+
         case 'r': //REA
-          if(msj->contador -'0' == worker) {
-            res = busca_lista(lista, msj->nombre);
-            if(res->indice > res->tam)
-              enviar_esp(mqd_d, 'r', '0', '0', NULL);
-            else {
-              size = MIN(msj->otrodato, res->tam - res->indice);
-              if((elem = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-                printf("Error\n");
-              memcpy(elem, &(res->texto)[res->indice], size);
-              elem[size] = '\0';
-              res->indice += size;
-              enviar_espwr(mqd_d,'r', '0', '0', size, elem, NULL);
-            }
-          }
-          else {
-            enviar_espwr(mqd_anillo,'r','5',msj->contador, msj->otrodato, msj->nombre, NULL);
-            recibir_msjs(dc, lista, NULL);
-          }
+          operadorREA(worker, dc, lista, msj);
           break;
+
         case 's': //CLO
-          if(msj->contador -'0' == worker) {
-            res = busca_lista(lista, msj->nombre);
-            res->estado = 0;
-            res->indice = 0;
-            enviar_esp(mqd_d, 's', '0', '0', NULL);
-          }
-          else {
-            enviar_esp(mqd_anillo,'s','5',msj->contador,msj->nombre);
-            recibir_msjs(dc, lista, NULL);
-          }
+          operadorCLO(worker, dc, lista, msj);
           break;
       }
       cerrar(mqd_d);

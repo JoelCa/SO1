@@ -120,7 +120,6 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
           if (((result = strtok(NULL, delims)) != NULL) && (strcmp(result, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
             enviar_esp(mqd_w,'c','0','m',result);
             msj = recibir_esp(mqd_d);
-            printf("recibio");
             switch(msj->dato) {
               case '0':
                 sprintf(buffer,"OK\n");
