@@ -388,3 +388,12 @@ char *cola_cadena(char *token)
   }
   return buff;
 }
+
+/*Colas *descriptor_cola(mqd_t *worker, mqd_t *disp, mqd_t *anillo)
+{
+
+  Colas *dc = (Colas*)malloc(sizeof(Colas));
+
+  if(worker != NULL)
+    dc->cola_worker
+    }*/

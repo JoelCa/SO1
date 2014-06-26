@@ -8,14 +8,6 @@
 
 extern pthread_barrier_t barrier; 
 
-extern ListaDes *des;
-
-typedef struct colas {
-  mqd_t cola_worker;
-  mqd_t cola_disp;
-  mqd_t cola_anillo;
-} Colas;
-
 //IDEA VIEJA: antes de que cada worker reciba un mensaje:
 //Abre tanto la cola del dispatcher como la cola de su vecino, y las mantiene abiertas.
 //ACTUALIZACIÓN: Ahora el worker NO crea la cola del dispatcher, solo la abre cada vez
@@ -29,6 +21,7 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
   int size;
   
   worker = (lista->cola)[5]-1;
+
   switch(msj->tipo) {
     case 'l': //LSD
       if((buff = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
@@ -37,11 +30,11 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
       strcat(buff, msj->nombre);
       enviar(anillo, 'l', msj->contador-1, 'f', buff);
       break;
+
     case 'd': //DEL
       switch(msj->dato) {
         case 'f':
-          aux = busca_lista(lista, msj->nombre);
-          if(aux != NULL) {
+          if((aux = busca_lista(lista, msj->nombre)) != NULL) {
             if(aux->estado == 0) {
               del_lista(lista,msj->nombre);
               enviar(anillo, 'd', msj->contador-1, 't', msj->nombre);
@@ -53,11 +46,13 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
           else
             reenvio_msj(anillo, msj, 'd');
           break;
+
         default:
           reenvio_msj(anillo, msj, 'd');
           break;
       }
       break;
+
     case 'c': //CRE
       switch(msj->dato) {
         case 'f':
@@ -75,11 +70,13 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
             reenvio_msj(anillo, msj, 'c');
           }        
           break;
+
         default:
           reenvio_msj(anillo, msj, 'c');
           break;
       }
       break;
+
     case 'o': //OPN
       switch(msj->dato) {
         case 'f':
@@ -93,19 +90,23 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
           else
             enviar(anillo,'o',msj->contador-1,msj->dato,msj->nombre);
           break;
+
         case 'e':
           enviar(anillo,'o',msj->contador-1,msj->dato,msj->nombre);
           break;
+
         default:
           enviar(anillo,'o',msj->contador-1,msj->dato,msj->nombre);
           break;
       }
       break;
+
     case 'w': //WRT
       switch(msj->dato) {
         case 't':
           reenvio_msj(anillo, msj, 'w');
           break;
+
         default:
           if(worker == msj->dato) {
             aux = busca_lista(lista, msj->nombre);
@@ -118,11 +119,13 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
           break;
       }
       break;
+
     case 'r': //REA
       switch(msj->dato) {
         case 't':
           reenvio_msj(anillo, msj, 'r');
           break;
+
         default:
           if(worker == msj->dato) {
             aux = busca_lista(lista, msj->nombre);
@@ -144,11 +147,13 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
           break;
       }
       break;
+
     case 's': //CLO
       switch(msj->dato) {
         case 't':
           reenvio_msj(anillo, msj, 's');
           break;
+
         default:
           if(worker == msj->dato) {
             aux = busca_lista(lista, msj->nombre);
@@ -167,17 +172,13 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
 
 int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
 {
-  switch(msj->tipo) {
-    case 'l': //LSD
-      if(msj->contador == '1') {
+  if(msj->contador == '1') {
+    switch(msj->tipo) {
+      case 'l': //LSD
         enviar(proc_socket, 'l', '0', 'f', msj->nombre);
-        return 1;
-      }
-      else
-        reenvio_por_anillo(anillo, msj, lista, NULL);
-      break;
-    case 'd': //DEL
-      if(msj->contador == '1') {
+        break;
+
+      case 'd': //DEL
         switch(msj->dato) {
           case 't':
             enviar(proc_socket, 'd', '0', '0', NULL);
@@ -189,13 +190,9 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
             enviar(proc_socket, 'd', '0', '2', NULL);
             break;
         }
-        return 1;
-      }
-      else
-        reenvio_por_anillo(anillo, msj, lista, NULL);
-      break;
-    case 'c': //CRE
-      if(msj->contador == '1') {
+        break;
+
+      case 'c': //CRE
         switch(msj->dato) {
           case 't':
             enviar(proc_socket, 'c', '0', '1', NULL);
@@ -208,13 +205,9 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
             enviar(proc_socket, 'c', '0', '2', NULL);
             break;
         }
-        return 1;
-      }
-      else
-        reenvio_por_anillo(anillo, msj, lista, candidato);
-      break;
-    case 'o': //OPN
-      if(msj->contador == '1') {
+        break;
+
+      case 'o': //OPN
         switch(msj->dato) {
           case 'f':
             enviar(proc_socket, 'o', '0', '2', NULL);
@@ -227,50 +220,38 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
             break;
             
         }
-        return 1;
-      }
-      else
-        reenvio_por_anillo(anillo, msj, lista, NULL);
-      break;
-    case 'w': //WRT
-      if(msj->contador == '1') {
+        break;
+
+      case 'w': //WRT
         switch(msj->dato) {
           case 't':
             enviar(proc_socket, 'w', '0', '0', NULL);
             break;
         }
-        return 1;
-      }
-      else
-        reenvio_por_anillo(anillo, msj, lista, NULL);
-      break;
-    case 'r': //REA
-      if(msj->contador == '1') {
+        break;
+
+      case 'r': //REA
         switch(msj->dato) {
           case 't':
             enviarWR(proc_socket, 'r', '0', '0', msj->otrodato, msj->nombre, NULL);
             break;
         }
-        return 1;
-      }
-      else
-        reenvio_por_anillo(anillo, msj, lista, NULL);
-      break;
-    case 's': //CLO
-      if(msj->contador == '1') {
+        break;
+
+      case 's': //CLO
         switch(msj->dato) {
           case 't':
             enviar(proc_socket,'s', '0', '0', NULL);
             break;
         }
-        return 1;
-      }
-      else
-        reenvio_por_anillo(anillo, msj, lista, NULL);
-      break;
+        break;
+    }
+    return 1;
   }
-  return 0;
+
+  reenvio_por_anillo(anillo, msj, lista, NULL);
   liberar_msj(msj);
+  return 0;
 }
 
 
@@ -378,7 +359,7 @@ void operadorREA(int worker, Colas dc, Lista *lista, Msj *msj)
       texto[size] = '\0';
       arch->indice += size;
       enviarWR(dc.cola_disp,'r', '0', '0', size, texto, NULL);
-      free(texto);
+      //free(texto);
     }
   }
   else {

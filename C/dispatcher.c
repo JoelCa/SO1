@@ -64,6 +64,92 @@ int respuesta(char *a, long conn_s)
   return -1;
 }
 
+void dispatcherLSD(mqd_t mqd_w, mqd_t mqd_d, long conn_s)
+{
+  char buffer[MAXSIZE_COLA];
+  Msj *msj;
+
+  enviar(mqd_w,'l','0','m',NULL);
+  msj = recibir(mqd_d);
+  sprintf(buffer,"OK");
+  strcat(buffer,msj->nombre);
+  strcat(buffer,"\n");
+  write(conn_s,buffer,strlen(buffer));
+  liberar_msj(msj);
+}
+
+void dispatcherDEL(mqd_t mqd_w, mqd_t mqd_d, long conn_s)
+{
+  char *token;
+  char delims[] = " ";
+  char buffer[MAXSIZE_COLA];
+  Msj *msj;
+
+  if (((token = strtok(NULL, delims)) != NULL) && (strcmp(token, "\r\n") != 0)
+      && (strtok(NULL, delims) == NULL)) {
+    enviar(mqd_w,'d','0','m',token);
+    msj = recibir(mqd_d);
+    switch(msj->dato) {
+      case '0':
+        sprintf(buffer,"OK\n");
+        write(conn_s,buffer,strlen(buffer));
+        break;
+      case '1':
+        sprintf(buffer,"ERROR EL ARCHIVO NO EXISTE\n");
+        write(conn_s,buffer,strlen(buffer));
+        break;
+      default:
+        sprintf(buffer,"ERROR EL ARCHIVO ESTA ABIERTO\n");
+        write(conn_s,buffer,strlen(buffer));
+        break;
+              
+    }
+    liberar_msj(msj);
+  }
+  else {
+    sprintf(buffer,"ERROR DE SINTAXIS\n");
+    write(conn_s,buffer,strlen(buffer));
+  }
+}
+
+void dispatcherCRE(mqd_t mqd_w, mqd_t mqd_d, long conn_s)
+{
+  char *token;
+  char delims[] = " ";
+  char buffer[MAXSIZE_COLA];
+  Msj *msj;
+
+  if (((token = strtok(NULL, delims)) != NULL) && (strcmp(token, "\r\n") != 0)
+      && (strtok(NULL, delims) == NULL)) {
+    enviar(mqd_w,'c','0','m',token);
+    msj = recibir(mqd_d);
+    switch(msj->dato) {
+      case '0':
+        sprintf(buffer,"OK\n");
+        write(conn_s,buffer,strlen(buffer));
+        break;
+      case '1':
+        sprintf(buffer,"ERROR EL ARCHIVO YA EXISTE\n");
+        write(conn_s,buffer,strlen(buffer));
+        break;
+      case '2':
+        sprintf(buffer,"ERROR INTENTE DE NUEVO\n");
+        write(conn_s,buffer,strlen(buffer));
+        break;
+    }
+    liberar_msj(msj);
+  }
+  else {
+    sprintf(buffer,"ERROR DE SINTAXIS\n");
+    write(conn_s,buffer,strlen(buffer));
+  }
+}
+
+void dispatcherOPN(mqd_t mqd_w, mqd_t mqd_d, long conn_s)
+{
+  return;
+}
+
 int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
 {
   char delims[] = " ", buffer[MAXSIZE_COLA];
@@ -80,66 +166,19 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
           sprintf(buffer,"ERROR YA ESTA CONECTADO\n");
           write(conn_s,buffer,strlen(buffer));
           break;
+
         case 1:      // LSD
-          enviar(mqd_w,'l','0','m',NULL);
-          msj = recibir(mqd_d);
-          sprintf(buffer,"OK");
-          strcat(buffer,msj->nombre);
-          strcat(buffer,"\n");
-          write(conn_s,buffer,strlen(buffer));
-          liberar_msj(msj);
+          dispatcherLSD(mqd_w, mqd_d, conn_s);
           break;
+
         case 2:      // DEL
-          if (((result = strtok(NULL, delims)) != NULL) && (strcmp(result, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
-            enviar(mqd_w,'d','0','m',result);
-            msj = recibir(mqd_d);
-            switch(msj->dato) {
-            case '0':
-              sprintf(buffer,"OK\n");
-              write(conn_s,buffer,strlen(buffer));
-              break;
-            case '1':
-              sprintf(buffer,"ERROR EL ARCHIVO NO EXISTE\n");
-              write(conn_s,buffer,strlen(buffer));
-              break;
-            default:
-              sprintf(buffer,"ERROR EL ARCHIVO ESTA ABIERTO\n");
-              write(conn_s,buffer,strlen(buffer));
-              break;
-              
-            }
-            liberar_msj(msj);
-          }
-          else {
-            sprintf(buffer,"ERROR DE SINTAXIS\n");
-            write(conn_s,buffer,strlen(buffer));
-          }
+          dispatcherDEL(mqd_w, mqd_d, conn_s);
           break;
+
         case 3:      // CRE
-          if (((result = strtok(NULL, delims)) != NULL) && (strcmp(result, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
-            enviar(mqd_w,'c','0','m',result);
-            msj = recibir(mqd_d);
-            switch(msj->dato) {
-              case '0':
-                sprintf(buffer,"OK\n");
-                write(conn_s,buffer,strlen(buffer));
-                break;
-              case '1':
-                sprintf(buffer,"ERROR EL ARCHIVO YA EXISTE\n");
-                write(conn_s,buffer,strlen(buffer));
-                break;
-              case '2':
-                sprintf(buffer,"ERROR INTENTE DE NUEVO\n");
-                write(conn_s,buffer,strlen(buffer));
-                break;
-            }
-            liberar_msj(msj);
-          }
-          else {
-            sprintf(buffer,"ERROR DE SINTAXIS\n");
-            write(conn_s,buffer,strlen(buffer));
-          }
+          dispatcherCRE(mqd_w, mqd_d, conn_s);
           break;
+
         case 4:      // OPN
           if (((result = strtok(NULL, delims)) != NULL) && (strcmp(result, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
             if (busca_des(des, result, 0, 0) != NULL) {
@@ -172,7 +211,7 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
           }
           break;
         case 5:     //WRT
-          i = 0;
+         i = 0;
           if(((result  = strtok(NULL, delims)) != NULL ) && (strcmp(result, "FD") == 0)) {
             fd0  = is_natural(strtok(NULL, delims));
             if(((result  = strtok(NULL, delims)) != NULL) && (strcmp(result, "SIZE") == 0)) {
@@ -254,7 +293,7 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
                   sprintf(buffer,"OK SIZE %d %s\n",msj->otrodato, msj->nombre);
                   write(conn_s,buffer,strlen(buffer));
                 }
-                liberar_msj(msj);
+                //liberar_msj(msj);
               }
               else {
                 sprintf(buffer,"ERROR EL ARCHIVO FUE ABIERTO POR OTRO USUARIO\n");
@@ -338,6 +377,7 @@ void *handle_client(void *arg)
   char buffer[MAXSIZE_COLA];
   int res, worker;
   mqd_t mqd_w, mqd_d;
+  Colas *dc;
 
   printf("Un nuevo cliente\n");
   while(1) {
@@ -350,12 +390,12 @@ void *handle_client(void *arg)
     if((worker = respuesta(buffer, conn_s)) >= 0) {
       printf("Un nuevo cliente conectado: worker nº %d\n",worker);
       mqd_w = abrir(colas[worker]);
-      //printf("se quiere abrir la cola: %s\n", colas[worker+5]);
-      mqd_d = nueva(colas[worker+5]);
+      mqd_d = nueva(colas[worker + N_WORKER]);
       while(1) {
         res=read(conn_s,buffer,MAXSIZE_COLA);
         if(res<=0) {
           sprintf(buffer, "BYE\r\n");
+          //dc = descriptor_cola(mqd_w, mqd_d, NULL);
           proc_socket(buffer, conn_s, worker, mqd_w, mqd_d);
           break;
         }
@@ -368,7 +408,7 @@ void *handle_client(void *arg)
       nro_worker[worker] = worker+1;
       pthread_mutex_unlock(&m);
       cerrar(mqd_w);
-      borrar(mqd_d,colas[worker+5]);
+      borrar(mqd_d,colas[worker + N_WORKER]);
       printf("Cliente desconectado: worker nº %d\n",worker);
       break;
     }

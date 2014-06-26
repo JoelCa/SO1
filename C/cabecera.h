@@ -4,6 +4,12 @@
 #define MAXSIZE_COLA 512
 #define N_WORKER 5
 
+typedef struct colas {
+  mqd_t cola_worker;
+  mqd_t cola_disp;
+  mqd_t cola_anillo;
+} Colas;
+
 //listas.c
 typedef struct archivo_ {
   char *nombre;
@@ -64,6 +70,8 @@ Descriptor *busca_des(ListaDes *des, char *dato, int descript, int tipo);
 ///
 char *cola_cadena(char *token);
 char *sacar_nueva_linea(char *nombrex);
+///
+//Colas inicializar_cola(mqd_t worker, mqd_t disp, mqd_t anillo);
 
 
 //mensajes.c

@@ -1,3 +1,8 @@
 Observaciones:
 
 -Cada worker crea su cola de mensajes desde el momento en que se conecta.
+
+Hacer:
+
+-Agregar la estrucutra Colas en cabecera.h
+-El acceso a la lista de descriptores debe ser atómica
