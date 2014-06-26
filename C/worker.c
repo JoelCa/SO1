@@ -34,9 +34,9 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
     case 'd': //DEL
       switch(msj->dato) {
         case 'f':
-          if((aux = busca_lista(lista, msj->nombre)) != NULL) {
+          if((aux = buscar_archivo(lista, msj->nombre)) != NULL) {
             if(aux->estado == 0) {
-              del_lista(lista,msj->nombre);
+              eliminar_archivo(lista,msj->nombre);
               enviar(anillo, 'd', msj->contador-1, 't', msj->nombre);
             }
             else {
@@ -56,7 +56,7 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
     case 'c': //CRE
       switch(msj->dato) {
         case 'f':
-          if(busca_lista(lista, msj->nombre) != NULL) {
+          if(buscar_archivo(lista, msj->nombre) != NULL) {
             if(candidato == NULL)
               enviar(anillo, 'c',msj->contador-1,'t',msj->nombre);
             else {
@@ -80,7 +80,7 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
     case 'o': //OPN
       switch(msj->dato) {
         case 'f':
-          aux = busca_lista(lista, msj->nombre);
+          aux = buscar_archivo(lista, msj->nombre);
           if(aux != NULL) {
             if(modificar_estado(aux))
               enviar(anillo,'o',msj->contador-1,worker,msj->nombre);
@@ -109,7 +109,7 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
 
         default:
           if(worker == msj->dato) {
-            aux = busca_lista(lista, msj->nombre);
+            aux = buscar_archivo(lista, msj->nombre);
             strcat(aux->texto, msj->texto);
             aux->tam += msj->otrodato;
             enviar(anillo, 'w', msj->contador-1, 't', NULL);
@@ -128,7 +128,7 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
 
         default:
           if(worker == msj->dato) {
-            aux = busca_lista(lista, msj->nombre);
+            aux = buscar_archivo(lista, msj->nombre);
             if(aux->indice > aux->tam) {
               enviar(anillo, 'r', msj->contador-1, 't', NULL);
             }
@@ -156,7 +156,7 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
 
         default:
           if(worker == msj->dato) {
-            aux = busca_lista(lista, msj->nombre);
+            aux = buscar_archivo(lista, msj->nombre);
             aux->estado = 0;
             aux->indice = 0;
             enviar(anillo,'s',msj->contador-1,'t',NULL);
@@ -198,7 +198,7 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
             enviar(proc_socket, 'c', '0', '1', NULL);
             break;
           case 'f':
-            ins_lista(lista, candidato);
+            nuevo_archivo(lista, candidato);
             enviar(proc_socket, 'c', '0', '0', NULL);
             break;
           case 'e':
@@ -284,9 +284,9 @@ void operadorDEL(Colas dc, Lista *lista, Msj *msj)
 {
   Archivo *arch;
 
-  if((arch = busca_lista(lista, msj->nombre)) != NULL) {
+  if((arch = buscar_archivo(lista, msj->nombre)) != NULL) {
     if(arch->estado == 0) {
-      del_lista(lista, msj->nombre);
+      eliminar_archivo(lista, msj->nombre);
       enviar(dc.cola_disp, 'd', '0', '0', NULL);
     }
     else
@@ -300,7 +300,7 @@ void operadorDEL(Colas dc, Lista *lista, Msj *msj)
 
 void operadorCRE(Colas dc, Lista *lista, Msj *msj)
 {
-  if(busca_lista(lista, msj->nombre) != NULL) {
+  if(buscar_archivo(lista, msj->nombre) != NULL) {
     enviar(dc.cola_disp, 'c', '0', '1', NULL);
   }
   else {
@@ -313,7 +313,7 @@ void operadorOPN(Colas dc, Lista *lista, Msj *msj)
 {
   Archivo *arch;
   
-  if((arch = busca_lista(lista, msj->nombre)) != NULL) {
+  if((arch = buscar_archivo(lista, msj->nombre)) != NULL) {
     if(modificar_estado(arch)) 
       enviar(dc.cola_disp, 'o', lista->cola[5] - 1, '0', NULL);
     else
@@ -330,7 +330,7 @@ void operadorWRT(int worker, Colas dc, Lista *lista, Msj *msj)
   Archivo *arch;
   
   if(msj->contador -'0' == worker) {
-    arch = busca_lista(lista, msj->nombre);
+    arch = buscar_archivo(lista, msj->nombre);
     strcat(arch->texto, msj->texto);
     arch->tam += msj->otrodato;
     enviar(dc.cola_disp, 'w', '0', '0', NULL);
@@ -348,7 +348,7 @@ void operadorREA(int worker, Colas dc, Lista *lista, Msj *msj)
   Archivo *arch;
 
   if(msj->contador -'0' == worker) {
-    arch = busca_lista(lista, msj->nombre);
+    arch = buscar_archivo(lista, msj->nombre);
     if(arch->indice > arch->tam)
       enviar(dc.cola_disp, 'r', '0', '0', NULL);
     else {
@@ -373,7 +373,7 @@ void operadorCLO(int worker, Colas dc, Lista *lista, Msj *msj)
   Archivo *arch;
 
   if(msj->contador -'0' == worker) {
-    arch = busca_lista(lista, msj->nombre);
+    arch = buscar_archivo(lista, msj->nombre);
     arch->estado = 0;
     arch->indice = 0;
     enviar(dc.cola_disp, 's', '0', '0', NULL);

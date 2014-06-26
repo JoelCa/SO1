@@ -24,8 +24,6 @@ typedef struct lista_ {
   Archivo *inicio;
   Archivo *fin;
   int t;
-  char *cola;
-  char *anillo;
 } Lista;
 
 typedef struct des_{
@@ -55,12 +53,12 @@ typedef struct msj_{
 
 //listas.c
 Lista *crear_lista(int n);
-int ins_lista(Lista *lista, char *nombre);
+int nuevo_archivo(Lista *lista, char *nombre);
 char* concatenar_archivos(Lista *lista);
 void visualizacion (Lista *lista);
-int del_lista(Lista *lista, char *nombre);
+int eliminar_archivo(Lista *lista, char *nombre);
 int modificar_estado(Archivo *elem);
-Archivo *busca_lista(Lista *lista, char *nombre);
+Archivo *buscar_archivo(Lista *lista, char *nombre);
 ///
 void crear_buff_des();
 int ins_descriptor(ListaDes *des, char *nombre, int worker_c, int worker_a);

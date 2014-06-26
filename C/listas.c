@@ -8,16 +8,7 @@ extern ListaDes *des;
 extern int fd;
 pthread_mutex_t m;
 
-void inicializacion (Lista *lista, char *cola, char *anillo)
-{
-  lista->inicio = NULL;
-  lista->fin = NULL;
-  lista->t = 0;
-  lista->cola = cola;
-  lista->anillo = anillo;
-}
-
-int ins_lista_vacia(Lista *lista, char *nombre)
+int lista_vacia(Lista *lista, char *nombre)
 {
   Archivo *ptr = (Archivo*)malloc(sizeof(Archivo));
 
@@ -38,13 +29,13 @@ int ins_lista_vacia(Lista *lista, char *nombre)
   return 0;
 }
 
-//agrega un archivo al inicio
-int ins_lista(Lista *lista, char *nombre)
+//Agrega un archivo a la lista de archivos, al inicio
+int nuevo_archivo(Lista *lista, char *nombre)
 {
   Archivo *ptr;
 
   if(lista->t == 0)
-    return (ins_lista_vacia(lista, nombre));
+    return lista_vacia(lista, nombre);
   if((ptr = (Archivo*)malloc(sizeof(Archivo)))== NULL)
     return -1;
   if ((ptr->nombre = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
@@ -61,7 +52,7 @@ int ins_lista(Lista *lista, char *nombre)
   return 0;
 }
 
-int del_lista(Lista *lista, char *nombre)
+int eliminar_archivo(Lista *lista, char *nombre)
 {
   Archivo *ptr = lista->inicio;
   Archivo *tmp = NULL;
@@ -105,7 +96,7 @@ int del_lista(Lista *lista, char *nombre)
   return 0;
 }
 
-Archivo *busca_lista(Lista *lista, char *nombre)
+Archivo *buscar_archivo(Lista *lista, char *nombre)
 {
   Archivo *ptr = lista->inicio;
 
@@ -118,20 +109,22 @@ Archivo *busca_lista(Lista *lista, char *nombre)
   return NULL;
 }
 
-
-Lista *crear_lista(int n)
+Lista *crear_lista_archivos(int n)
 {
-  char *buff1, *buff2;
+  //char *buff1, *buff2;
   Lista *lista;
 
-  buff1 = malloc(10*sizeof(char));
-  buff2 = malloc(10*sizeof(char));
+  //buff1 = malloc(7*sizeof(char));
+  //buff2 = malloc(7*sizeof(char));
   if ((lista = (Lista *)malloc (sizeof(Lista))) == NULL)
-    printf("error al crear el buffer del worker %d\n",n);
-  sprintf(buff1, "/cola%d", n);
-  sprintf(buff2, "/cola%d", n%N_WORKER+1);
-  //printf("tenemos en la lista de %d:\n %s\n%s\n", n, buff1, buff2);
-  inicializacion(lista, buff1, buff2);
+    printf("Error al crear el buffer del worker nº %d\n",n);
+  //sprintf(buff1, "/cola%d", n);
+  //sprintf(buff2, "/cola%d", n%N_WORKER+1);
+
+  lista->inicio = NULL;
+  lista->fin = NULL;
+  lista->t = 0;
+
   return lista;
 }
 
