@@ -1,20 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include "cabecera.h"
 
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
-#define N_WORKER 5
 
 extern pthread_barrier_t barrier; 
 
 extern ListaDes *des;
 
-typedef struct des_cola {
-  mqd_t mqd_cola;
-  mqd_t mqd_d;
-  mqd_t mqd_anillo;
-} DesCola;
+typedef struct colas {
+  mqd_t cola_worker;
+  mqd_t cola_disp;
+  mqd_t cola_anillo;
+} Colas;
 
 //IDEA VIEJA: antes de que cada worker reciba un mensaje:
 //Abre tanto la cola del dispatcher como la cola de su vecino, y las mantiene abiertas.
@@ -32,10 +32,10 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
   switch(msj->tipo) {
     case 'l': //LSD
       if((buff = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-        printf("Error\n");  
+        printf("LSD: error\n");  
       buff = concatenar_archivos(lista);
       strcat(buff, msj->nombre);
-      enviar_esp(anillo, 'l', msj->contador-1, 'f', buff);
+      enviar(anillo, 'l', msj->contador-1, 'f', buff);
       break;
     case 'd': //DEL
       switch(msj->dato) {
@@ -44,10 +44,10 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
           if(aux != NULL) {
             if(aux->estado == 0) {
               del_lista(lista,msj->nombre);
-              enviar_esp(anillo, 'd', msj->contador-1, 't', msj->nombre);
+              enviar(anillo, 'd', msj->contador-1, 't', msj->nombre);
             }
             else {
-              enviar_esp(anillo, 'd', msj->contador-1, 'e', msj->nombre);
+              enviar(anillo, 'd', msj->contador-1, 'e', msj->nombre);
             }
           }
           else
@@ -63,12 +63,12 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
         case 'f':
           if(busca_lista(lista, msj->nombre) != NULL) {
             if(candidato == NULL)
-              enviar_esp(anillo, 'c',msj->contador-1,'t',msj->nombre);
+              enviar(anillo, 'c',msj->contador-1,'t',msj->nombre);
             else {
               if(strcmp(candidato, msj->nombre) == 0)
-                enviar_esp(anillo,'c',msj->contador-1,'e',msj->nombre);
+                enviar(anillo,'c',msj->contador-1,'e',msj->nombre);
               else
-                enviar_esp(anillo,'c',msj->contador-1,'t',msj->nombre);
+                enviar(anillo,'c',msj->contador-1,'t',msj->nombre);
             }
           }
           else {
@@ -86,18 +86,18 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
           aux = busca_lista(lista, msj->nombre);
           if(aux != NULL) {
             if(modificar_estado(aux))
-              enviar_esp(anillo,'o',msj->contador-1,worker,msj->nombre);
+              enviar(anillo,'o',msj->contador-1,worker,msj->nombre);
             else
-              enviar_esp(anillo,'o',msj->contador-1,'e',msj->nombre);
+              enviar(anillo,'o',msj->contador-1,'e',msj->nombre);
           }
           else
-            enviar_esp(anillo,'o',msj->contador-1,msj->dato,msj->nombre);
+            enviar(anillo,'o',msj->contador-1,msj->dato,msj->nombre);
           break;
         case 'e':
-          enviar_esp(anillo,'o',msj->contador-1,msj->dato,msj->nombre);
+          enviar(anillo,'o',msj->contador-1,msj->dato,msj->nombre);
           break;
         default:
-          enviar_esp(anillo,'o',msj->contador-1,msj->dato,msj->nombre);
+          enviar(anillo,'o',msj->contador-1,msj->dato,msj->nombre);
           break;
       }
       break;
@@ -111,7 +111,7 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
             aux = busca_lista(lista, msj->nombre);
             strcat(aux->texto, msj->texto);
             aux->tam += msj->otrodato;
-            enviar_esp(anillo, 'w', msj->contador-1, 't', NULL);
+            enviar(anillo, 'w', msj->contador-1, 't', NULL);
           }
           else
             reenvio_msj(anillo, msj, 'w');
@@ -127,16 +127,16 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
           if(worker == msj->dato) {
             aux = busca_lista(lista, msj->nombre);
             if(aux->indice > aux->tam) {
-              enviar_esp(anillo, 'r', msj->contador-1, 't', NULL);
+              enviar(anillo, 'r', msj->contador-1, 't', NULL);
             }
             else {
               size = MIN(msj->otrodato, aux->tam - aux->indice);
               if((buff = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-                printf("Error\n");
+                printf("REA: error\n");
               memcpy(buff, &(aux->texto)[aux->indice], size);
               buff[size] = '\0';
               aux->indice +=  size;
-              enviar_espwr(anillo, 'r', msj->contador-1, 't', size, buff, NULL);
+              enviarWR(anillo, 'r', msj->contador-1, 't', size, buff, NULL);
             }
           }
           else
@@ -154,7 +154,7 @@ void reenvio_por_anillo(mqd_t anillo, Msj *msj, Lista *lista, char *candidato)
             aux = busca_lista(lista, msj->nombre);
             aux->estado = 0;
             aux->indice = 0;
-            enviar_esp(anillo,'s',msj->contador-1,'t',NULL);
+            enviar(anillo,'s',msj->contador-1,'t',NULL);
           }
           else
             reenvio_msj(anillo, msj, 's');
@@ -170,7 +170,7 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
   switch(msj->tipo) {
     case 'l': //LSD
       if(msj->contador == '1') {
-        enviar_esp(proc_socket, 'l', '0', 'f', msj->nombre);
+        enviar(proc_socket, 'l', '0', 'f', msj->nombre);
         return 1;
       }
       else
@@ -180,13 +180,13 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
       if(msj->contador == '1') {
         switch(msj->dato) {
           case 't':
-            enviar_esp(proc_socket, 'd', '0', '0', NULL);
+            enviar(proc_socket, 'd', '0', '0', NULL);
             break;
           case 'f':
-            enviar_esp(proc_socket, 'd', '0', '1', NULL);
+            enviar(proc_socket, 'd', '0', '1', NULL);
             break;
           default:
-            enviar_esp(proc_socket, 'd', '0', '2', NULL);
+            enviar(proc_socket, 'd', '0', '2', NULL);
             break;
         }
         return 1;
@@ -198,14 +198,14 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
       if(msj->contador == '1') {
         switch(msj->dato) {
           case 't':
-            enviar_esp(proc_socket, 'c', '0', '1', NULL);
+            enviar(proc_socket, 'c', '0', '1', NULL);
             break;
           case 'f':
             ins_lista(lista, candidato);
-            enviar_esp(proc_socket, 'c', '0', '0', NULL);
+            enviar(proc_socket, 'c', '0', '0', NULL);
             break;
           case 'e':
-            enviar_esp(proc_socket, 'c', '0', '2', NULL);
+            enviar(proc_socket, 'c', '0', '2', NULL);
             break;
         }
         return 1;
@@ -217,13 +217,13 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
       if(msj->contador == '1') {
         switch(msj->dato) {
           case 'f':
-            enviar_esp(proc_socket, 'o', '0', '2', NULL);
+            enviar(proc_socket, 'o', '0', '2', NULL);
             break;
           case 'e':
-            enviar_esp(proc_socket, 'o', '0', '1', NULL);
+            enviar(proc_socket, 'o', '0', '1', NULL);
             break;
           default:
-            enviar_esp(proc_socket, 'o', msj->dato, '0', NULL);
+            enviar(proc_socket, 'o', msj->dato, '0', NULL);
             break;
             
         }
@@ -236,7 +236,7 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
       if(msj->contador == '1') {
         switch(msj->dato) {
           case 't':
-            enviar_esp(proc_socket, 'w', '0', '0', NULL);
+            enviar(proc_socket, 'w', '0', '0', NULL);
             break;
         }
         return 1;
@@ -248,7 +248,7 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
       if(msj->contador == '1') {
         switch(msj->dato) {
           case 't':
-            enviar_espwr(proc_socket, 'r', '0', '0', msj->otrodato, msj->nombre, NULL);
+            enviarWR(proc_socket, 'r', '0', '0', msj->otrodato, msj->nombre, NULL);
             break;
         }
         return 1;
@@ -260,7 +260,7 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
       if(msj->contador == '1') {
         switch(msj->dato) {
           case 't':
-            enviar_esp(proc_socket,'s', '0', '0', NULL);
+            enviar(proc_socket,'s', '0', '0', NULL);
             break;
         }
         return 1;
@@ -270,181 +270,174 @@ int evaluar_msj(mqd_t proc_socket, mqd_t anillo, Msj *msj, Lista *lista, char *c
       break;
   }
   return 0;
-  liberar_msj(&msj);
+  liberar_msj(msj);
 }
 
-int recibir_msjs(DesCola ds, Lista *lista, char *candidato)
+
+int recibir_msjs(Colas dc, Lista *lista, char *candidato)
 {
   Msj *msj;
 
   while(1) {
-    msj = recibir_esp(ds.mqd_cola);
-    if(evaluar_msj(ds.mqd_d, ds.mqd_anillo, msj, lista, candidato))
+    msj = recibir(dc.cola_worker);
+    if(evaluar_msj(dc.cola_disp, dc.cola_anillo, msj, lista, candidato))
       break;
   }
   return 0;
 }
 
-void operadorLSD(DesCola ds, Lista *lista, Msj *msj)
-{
-  char *elem;
 
-  if((elem = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-    printf("Error\n");
-  elem = concatenar_archivos(lista);
-  enviar_esp(ds.mqd_anillo,'l', '5', 'f', elem);
-  recibir_msjs(ds, lista, NULL);
+void operadorLSD(Colas dc, Lista *lista)
+{
+  char *nombres;
+
+  if((nombres = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
+    printf("LSD: error\n");
+  nombres = concatenar_archivos(lista);
+  enviar(dc.cola_anillo,'l', '5', 'f', nombres);
+  recibir_msjs(dc, lista, NULL);
+  free(nombres);
 }
 
-void operadorDEL(DesCola ds, Lista *lista, Msj *msj)
+void operadorDEL(Colas dc, Lista *lista, Msj *msj)
 {
-  Archivo *res;
+  Archivo *arch;
 
-  res = busca_lista(lista, msj->nombre);
-  if(res != NULL) {
-    if(res->estado == 0) {
+  if((arch = busca_lista(lista, msj->nombre)) != NULL) {
+    if(arch->estado == 0) {
       del_lista(lista, msj->nombre);
-      enviar_esp(ds.mqd_d, 'd', '0', '0', NULL);
+      enviar(dc.cola_disp, 'd', '0', '0', NULL);
     }
     else
-      enviar_esp(ds.mqd_d, 'd', '0', 'e', NULL);
+      enviar(dc.cola_disp, 'd', '0', 'e', NULL);
   }
   else {
-    enviar_esp(ds.mqd_anillo,'d','5','f',msj->nombre);
-    recibir_msjs(ds, lista, NULL);
+    enviar(dc.cola_anillo,'d','5','f',msj->nombre);
+    recibir_msjs(dc, lista, NULL);
   }
 }
 
-void operadorCRE(DesCola ds, Lista *lista, Msj *msj)
+void operadorCRE(Colas dc, Lista *lista, Msj *msj)
 {
   if(busca_lista(lista, msj->nombre) != NULL) {
-    enviar_esp(ds.mqd_d, 'c', '0', '1', NULL);
+    enviar(dc.cola_disp, 'c', '0', '1', NULL);
   }
   else {
-    enviar_esp(ds.mqd_anillo,'c','5','f',msj->nombre);
-    recibir_msjs(ds, lista, msj->nombre);
+    enviar(dc.cola_anillo,'c','5','f',msj->nombre);
+    recibir_msjs(dc, lista, msj->nombre);
   }
 }
 
-void operadorOPN(DesCola ds, Lista *lista, Msj *msj)
+void operadorOPN(Colas dc, Lista *lista, Msj *msj)
 {
-  Archivo *res;
+  Archivo *arch;
   
-  res = busca_lista(lista, msj->nombre);
-  if(res != NULL) {
-    if(modificar_estado(res)) 
-      enviar_esp(ds.mqd_d, 'o', lista->cola[5] - 1, '0', NULL);
+  if((arch = busca_lista(lista, msj->nombre)) != NULL) {
+    if(modificar_estado(arch)) 
+      enviar(dc.cola_disp, 'o', lista->cola[5] - 1, '0', NULL);
     else
-      enviar_esp(ds.mqd_d, 'o', '0', '1', NULL);
+      enviar(dc.cola_disp, 'o', '0', '1', NULL);
   }
   else {
-    enviar_esp(ds.mqd_anillo,'o','5','f',msj->nombre);
-    recibir_msjs(ds, lista, NULL);
+    enviar(dc.cola_anillo,'o','5','f',msj->nombre);
+    recibir_msjs(dc, lista, NULL);
   }
 }
 
-void operadorWRT(int worker, DesCola ds, Lista *lista, Msj *msj)
+void operadorWRT(int worker, Colas dc, Lista *lista, Msj *msj)
 {
-  Archivo *res;
+  Archivo *arch;
   
   if(msj->contador -'0' == worker) {
-    res = busca_lista(lista, msj->nombre);
-    strcat(res->texto, msj->texto);
-    res->tam += msj->otrodato;
-    enviar_esp(ds.mqd_d, 'w', '0', '0', NULL);
+    arch = busca_lista(lista, msj->nombre);
+    strcat(arch->texto, msj->texto);
+    arch->tam += msj->otrodato;
+    enviar(dc.cola_disp, 'w', '0', '0', NULL);
   }
   else {
-    enviar_espwr(ds.mqd_anillo,'w','5',msj->contador, msj->otrodato, msj->nombre, msj->texto);
-    recibir_msjs(ds, lista, NULL);
+    enviarWR(dc.cola_anillo,'w','5',msj->contador, msj->otrodato, msj->nombre, msj->texto);
+    recibir_msjs(dc, lista, NULL);
   }
 }
 
-void operadorREA(int worker, DesCola ds, Lista *lista, Msj *msj)
+void operadorREA(int worker, Colas dc, Lista *lista, Msj *msj)
 {
-  Archivo *res;
-  char *elem;
   int size;
+  char *texto;
+  Archivo *arch;
 
   if(msj->contador -'0' == worker) {
-    res = busca_lista(lista, msj->nombre);
-    if(res->indice > res->tam)
-      enviar_esp(ds.mqd_d, 'r', '0', '0', NULL);
+    arch = busca_lista(lista, msj->nombre);
+    if(arch->indice > arch->tam)
+      enviar(dc.cola_disp, 'r', '0', '0', NULL);
     else {
-      size = MIN(msj->otrodato, res->tam - res->indice);
-      if((elem = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-        printf("Error\n");
-      memcpy(elem, &(res->texto)[res->indice], size);
-      elem[size] = '\0';
-      res->indice += size;
-      enviar_espwr(ds.mqd_d,'r', '0', '0', size, elem, NULL);
+      size = MIN(msj->otrodato, arch->tam - arch->indice);
+      if((texto = (char *) malloc(size * sizeof (char))) == NULL)
+        printf("REA: error\n");
+      memcpy(texto, &(arch->texto)[arch->indice], size);
+      texto[size] = '\0';
+      arch->indice += size;
+      enviarWR(dc.cola_disp,'r', '0', '0', size, texto, NULL);
+      free(texto);
     }
   }
   else {
-    enviar_espwr(ds.mqd_anillo,'r','5',msj->contador, msj->otrodato, msj->nombre, NULL);
-    recibir_msjs(ds, lista, NULL);
+    enviarWR(dc.cola_anillo,'r','5',msj->contador, msj->otrodato, msj->nombre, NULL);
+    recibir_msjs(dc, lista, NULL);
   }
 }
 
-void operadorCLO(int worker, DesCola ds, Lista *lista, Msj *msj)
+void operadorCLO(int worker, Colas dc, Lista *lista, Msj *msj)
 {
-  Archivo *res;
+  Archivo *arch;
 
   if(msj->contador -'0' == worker) {
-    res = busca_lista(lista, msj->nombre);
-    res->estado = 0;
-    res->indice = 0;
-    enviar_esp(ds.mqd_d, 's', '0', '0', NULL);
+    arch = busca_lista(lista, msj->nombre);
+    arch->estado = 0;
+    arch->indice = 0;
+    enviar(dc.cola_disp, 's', '0', '0', NULL);
   }
   else {
-    enviar_esp(ds.mqd_anillo,'s','5',msj->contador,msj->nombre);
-    recibir_msjs(ds, lista, NULL);
+    enviar(dc.cola_anillo,'s','5',msj->contador,msj->nombre);
+    recibir_msjs(dc, lista, NULL);
   }
 }
 
 
 void *fs (void * arg)
 {
-  char *cola,*anillo,*elem;
-  int worker, size;
-  mqd_t mqd_cola, mqd_anillo, mqd_d;
+  int worker;
+  char *cola,*anillo, disp[7];
   Msj *msj;
-  Archivo *res;
-  //debo borrar descola
-  DesCola dc;
-  char buff[MAXSIZE_COLA], cola_disp[12];
+  Colas dc;
   Lista *lista;
+  mqd_t cola_worker, cola_anillo, cola_disp;
 
   worker = *(int *)arg;
-  //printf("tenemos %d\n", worker);
   crear_cola(worker);
   lista = crear_lista(worker);
-  sprintf(cola_disp, "/cola%d", (worker+N_WORKER)%(2*N_WORKER));
 
+  sprintf(disp, "/cola%d", (worker+N_WORKER)%(2*N_WORKER));
   cola = lista->cola;
   anillo = lista->anillo;
-  //  worker = cola[5] - '0' - 1;
   worker--;
-  //printf("tenemos luego %d\n", worker);
 
   pthread_barrier_wait(&barrier);
 
-  mqd_cola = abrir(cola);
-  //printf("worker %d activo\nabre la cola: %s\n", worker+1, cola);
-  mqd_anillo = abrir(anillo);
-  //printf("el worker abre la cola: %s\n", cola_disp);
+  cola_worker = abrir(cola);
+  cola_anillo = abrir(anillo);
 
   while(1) {
-    msj = recibir_esp(mqd_cola);
+    msj = recibir(cola_worker);
     //imprimir_msj(msj);
     if(msj->dato == 'm') {
-      mqd_d = abrir(cola_disp);
-      dc.mqd_cola = mqd_cola;
-      dc.mqd_d = mqd_d;
-      dc.mqd_anillo = mqd_anillo;
+      cola_disp = abrir(disp);
+      dc.cola_worker = cola_worker;
+      dc.cola_disp = cola_disp;
+      dc.cola_anillo = cola_anillo;
       switch(msj->tipo) {
-
         case 'l': //LSD
-          operadorLSD(dc, lista, NULL);
+          operadorLSD(dc, lista);
           break;
 
         case 'd': //DEL
@@ -471,15 +464,14 @@ void *fs (void * arg)
           operadorCLO(worker, dc, lista, msj);
           break;
       }
-      cerrar(mqd_d);
+      cerrar(cola_disp);
     }
     else 
-      reenvio_por_anillo(mqd_anillo,msj,lista,NULL);
+      reenvio_por_anillo(cola_anillo,msj,lista,NULL);
   }
-  //printf("se cierra: %s\n", cola);
-  cerrar(mqd_cola);
-  //cerrar(mqd_d);
-  cerrar(mqd_anillo);
-  mq_unlink(cola_disp);
+  cerrar(cola_worker);
+  cerrar(cola_disp); //estaba comentada
+  cerrar(cola_anillo);
+  mq_unlink(disp);
   mq_unlink(cola);
 }

@@ -16,7 +16,6 @@ char *colas[10] = {"/cola1", "/cola2", "/cola3", "/cola4", "/cola5","/cola6","/c
 static char *operaciones[9] = {"CON\r\n","LSD\r\n", "DEL", "CRE", "OPN", "WRT", "REA", "CLO", "BYE\r\n"};
 extern ListaDes *des;
 
-
 int eleccion_worker()
 {
   int i,j,n;
@@ -82,18 +81,18 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
           write(conn_s,buffer,strlen(buffer));
           break;
         case 1:      // LSD
-          enviar_esp(mqd_w,'l','0','m',NULL);
-          msj = recibir_esp(mqd_d);
+          enviar(mqd_w,'l','0','m',NULL);
+          msj = recibir(mqd_d);
           sprintf(buffer,"OK");
           strcat(buffer,msj->nombre);
           strcat(buffer,"\n");
           write(conn_s,buffer,strlen(buffer));
-          liberar_msj(&msj);
+          liberar_msj(msj);
           break;
         case 2:      // DEL
           if (((result = strtok(NULL, delims)) != NULL) && (strcmp(result, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
-            enviar_esp(mqd_w,'d','0','m',result);
-            msj = recibir_esp(mqd_d);
+            enviar(mqd_w,'d','0','m',result);
+            msj = recibir(mqd_d);
             switch(msj->dato) {
             case '0':
               sprintf(buffer,"OK\n");
@@ -109,7 +108,7 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
               break;
               
             }
-            liberar_msj(&msj);
+            liberar_msj(msj);
           }
           else {
             sprintf(buffer,"ERROR DE SINTAXIS\n");
@@ -118,8 +117,8 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
           break;
         case 3:      // CRE
           if (((result = strtok(NULL, delims)) != NULL) && (strcmp(result, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
-            enviar_esp(mqd_w,'c','0','m',result);
-            msj = recibir_esp(mqd_d);
+            enviar(mqd_w,'c','0','m',result);
+            msj = recibir(mqd_d);
             switch(msj->dato) {
               case '0':
                 sprintf(buffer,"OK\n");
@@ -134,7 +133,7 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
                 write(conn_s,buffer,strlen(buffer));
                 break;
             }
-            liberar_msj(&msj);
+            liberar_msj(msj);
           }
           else {
             sprintf(buffer,"ERROR DE SINTAXIS\n");
@@ -148,8 +147,8 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
               write(conn_s,buffer,strlen(buffer));
             }
             else {
-              enviar_esp(mqd_w,'o','0','m',result);
-              msj = recibir_esp(mqd_d);
+              enviar(mqd_w,'o','0','m',result);
+              msj = recibir(mqd_d);
               switch(msj->dato) {
                 case '0':
                   sprintf(buffer,"OK FD %d\n", ins_descriptor(des, result, msj->contador-'0', worker));
@@ -164,7 +163,7 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
                   write(conn_s,buffer,strlen(buffer));
                   break;
               }
-              liberar_msj(&msj);
+              liberar_msj(msj);
             }
           }
           else {
@@ -195,11 +194,11 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
                 if(elem->worker_a == worker) {
                   result = cola_cadena(result);
                   if(strlen(result) == size) {
-                    enviar_espwr(mqd_w,'w',(char)(((int)'0')+elem->worker_c),'m',size,elem->nombre,result);
-                    msj = recibir_esp(mqd_d);
+                    enviarWR(mqd_w,'w',(char)(((int)'0')+elem->worker_c),'m',size,elem->nombre,result);
+                    msj = recibir(mqd_d);
                     sprintf(buffer,"OK\n");
                     write(conn_s,buffer,strlen(buffer));
-                    liberar_msj(&msj);
+                    liberar_msj(msj);
                   }
                   else {
                     sprintf(buffer,"ERROR TAMAÑO INCORRECTO\n");
@@ -245,8 +244,8 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
             }
             else {
               if(elem->worker_a == worker) {
-                enviar_espwr(mqd_w,'r',(char)(((int)'0')+elem->worker_c),'m', size, elem->nombre, NULL);
-                msj = recibir_esp(mqd_d);
+                enviarWR(mqd_w,'r',(char)(((int)'0')+elem->worker_c),'m', size, elem->nombre, NULL);
+                msj = recibir(mqd_d);
                 if(msj->nombre == NULL) {
                   sprintf(buffer,"OK SIZE 0\n");
                   write(conn_s,buffer,strlen(buffer));
@@ -255,7 +254,7 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
                   sprintf(buffer,"OK SIZE %d %s\n",msj->otrodato, msj->nombre);
                   write(conn_s,buffer,strlen(buffer));
                 }
-                liberar_msj(&msj);
+                liberar_msj(msj);
               }
               else {
                 sprintf(buffer,"ERROR EL ARCHIVO FUE ABIERTO POR OTRO USUARIO\n");
@@ -283,12 +282,12 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
             }
             else {
               if(elem->worker_a == worker) {
-                enviar_esp(mqd_w,'s',(char)(((int)'0')+elem->worker_c),'m',elem->nombre);
-                msj = recibir_esp(mqd_d);
+                enviar(mqd_w,'s',(char)(((int)'0')+elem->worker_c),'m',elem->nombre);
+                msj = recibir(mqd_d);
                 del_descriptor(des, elem->nombre);
                 sprintf(buffer,"OK\n");
                 write(conn_s,buffer,strlen(buffer));
-                liberar_msj(&msj);
+                liberar_msj(msj);
               }
               else {
                 sprintf(buffer,"ERROR EL ARCHIVO FUE ABIERTO POR OTRO USUARIO\n");
@@ -305,10 +304,10 @@ int proc_socket(char *a, long conn_s, int worker, mqd_t mqd_w, mqd_t mqd_d)
           elem =  des->inicio;
           while(elem != NULL) {
             if(elem->worker_a == worker) {
-              enviar_esp(mqd_w,'s',(char)(((int)'0')+elem->worker_c),'m',elem->nombre);
-              msj = recibir_esp(mqd_d);
+              enviar(mqd_w,'s',(char)(((int)'0')+elem->worker_c),'m',elem->nombre);
+              msj = recibir(mqd_d);
               del_descriptor(des, elem->nombre);
-              liberar_msj(&msj);
+              liberar_msj(msj);
             }
             elem = elem->proximo;
           }
@@ -339,7 +338,6 @@ void *handle_client(void *arg)
   char buffer[MAXSIZE_COLA];
   int res, worker;
   mqd_t mqd_w, mqd_d;
-  int i;
 
   printf("Un nuevo cliente\n");
   while(1) {

@@ -2,6 +2,7 @@
 
 #define MAXMSG_COLA 5
 #define MAXSIZE_COLA 512
+#define N_WORKER 5
 
 //listas.c
 typedef struct archivo_ {
@@ -66,8 +67,6 @@ char *sacar_nueva_linea(char *nombrex);
 
 
 //mensajes.c
-//mqd_t *crear_cola(int cola);
-//mqd_t *nueva(char *nombre);
 mqd_t crear_cola(int cola);
 mqd_t nueva(char *nombre);
 mqd_t abrir(char *nombre);
@@ -75,10 +74,10 @@ int cerrar(mqd_t cola);
 int borrar(mqd_t cola, char *nombre_cola);
 int atributos(mqd_t cola, char *nombre);
 void imprimir_msj(Msj *msj);
-void enviar_esp(mqd_t mqd, char tipo, char contador, char dato, char *nombre);
-void liberar_msj(Msj **msj);
-void enviar_espwr(mqd_t mqd, char tipo, char contador, char dato, int otrodato, char *nombre, char *texto);
-Msj* recibir_esp(mqd_t mqd);
+void enviar(mqd_t mqd, char tipo, char contador, char dato, char *nombre);
+void liberar_msj(Msj *msj);
+void enviarWR(mqd_t mqd, char tipo, char contador, char dato, int otrodato, char *nombre, char *texto);
+Msj* recibir(mqd_t mqd);
 void reenvio_msj(mqd_t mqd, Msj *msj, char tipo);
 
 

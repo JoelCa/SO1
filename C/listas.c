@@ -4,8 +4,6 @@
 #include <pthread.h>
 #include "cabecera.h"
 
-#define N_WORKER 5
-
 extern ListaDes *des;
 extern int fd;
 pthread_mutex_t m;

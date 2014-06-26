@@ -3,26 +3,12 @@
 #include <string.h>
 #include "cabecera.h"
 
-/* mqd_t *nueva(char *nombre) */
-/* { */
-/*   struct mq_attr atributos; */
-/*   mqd_t *cola; */
-
-/*   atributos.mq_maxmsg = MAXMSG_COLA; */
-/*   atributos.mq_msgsize = MAXSIZE_COLA; */
-/*   atributos.mq_flags = 0; */
-
-/*   if ((*cola = mq_open(nombre, O_CREAT | O_RDWR, S_IRWXU, &atributos)) == (mqd_t)-1) */
-/*     perror ("mq_open"); */
-/*   return cola; */
-/* } */
-
 mqd_t nueva(char *nombre)
 {
   struct mq_attr atributos;
   mqd_t cola;
 
-  printf("se crea la cola: %s\n", nombre);
+  printf("Se crea la cola: %s\n", nombre);
   atributos.mq_maxmsg = MAXMSG_COLA;
   atributos.mq_msgsize = MAXSIZE_COLA;
   atributos.mq_flags = 0;
@@ -41,14 +27,14 @@ mqd_t abrir(char *nombre)
   return cola;
 }
 
-int enviar(mqd_t cola, char *mensaje)
+int enviar_msj(mqd_t cola, char *mensaje)
 {
   if(mq_send(cola, mensaje, MAXSIZE_COLA, 0) == -1) 
     perror("mq_send");
   return 0;
 }
 
-int recibir(mqd_t cola, char *buf)
+int recibir_msj(mqd_t cola, char *buf)
 {
   if (mq_receive(cola, buf, MAXSIZE_COLA, NULL) == -1) 
     perror("mq_receive");
@@ -86,7 +72,8 @@ mqd_t crear_cola(int cola)
   mqd_t mqd;
   char *buff;
   
-  buff = malloc(10*sizeof(char));
+  if((buff = (char *) malloc(7*sizeof(char))) == NULL)
+     printf("Error al crear cola de mensajes");
   sprintf(buff, "/cola%d", cola);
   //printf("creacion de la cola:  %s\n", buff);
   mq_unlink(buff);
@@ -95,24 +82,23 @@ mqd_t crear_cola(int cola)
   return mqd;
 }
 
-void enviar_esp(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
+void enviar(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
 {
   Msj *msj;
 
-  if((msj = (Msj *)malloc(sizeof(Msj))) == NULL)
+  if((msj = (Msj *) malloc(sizeof(Msj))) == NULL)
     printf("Error al enviar mensaje\n");
-
   msj->tipo = tipo;
   msj->contador = contador;
   msj->dato = dato;
   msj->otrodato = '0';
   msj->nombre = nombre;
   msj->texto = NULL;
-  enviar(mqd, (char *)msj);
+  enviar_msj(mqd, (char *)msj);
   free(msj);
 }
 
-void enviar_espwr(mqd_t mqd, char tipo, char contador, char dato, int otrodato, char *nombre, char *texto)
+void enviarWR(mqd_t mqd, char tipo, char contador, char dato, int otrodato, char *nombre, char *texto)
 {
   Msj *msj = (Msj *)malloc(sizeof(Msj));
 
@@ -122,78 +108,41 @@ void enviar_espwr(mqd_t mqd, char tipo, char contador, char dato, int otrodato, 
   msj->otrodato = otrodato;
   msj->nombre = nombre;
   msj->texto = texto;
-  enviar(mqd, (char *)msj);
-}
-
-void enviar_iniciar_cola(char *cola, char tipo, char contador, char dato, char *nombre)
-{
-  Msj *msj;
-  mqd_t mqd_d;
-
-  if((msj = (Msj *)malloc(sizeof(Msj))) == NULL)
-    printf("Error al enviar mensaje\n");
-  mqd_d = abrir(cola);
-  msj->tipo = tipo;
-  msj->contador = contador;
-  msj->dato = dato;
-  msj->otrodato = '0';
-  msj->nombre = nombre;
-  msj->texto = NULL;
-  enviar(mqd_d, (char *)msj);
-  free(msj);
-  cerrar(mqd_d);
-}
-
-void enviar_iniciar_cola_wr(char *cola, char tipo, char contador, char dato, int otrodato, char *nombre, char *texto)
-{
-  Msj *msj = (Msj *)malloc(sizeof(Msj));
-  mqd_t mqd_d;
-
-  mqd_d = abrir(cola);
-  msj->tipo = tipo;
-  msj->contador = contador;
-  msj->dato = dato;
-  msj->otrodato = otrodato;
-  msj->nombre = nombre;
-  msj->texto = texto;
-  enviar(mqd_d, (char *)msj);
-  cerrar(mqd_d);
+  enviar_msj(mqd, (char *)msj);
 }
 
 void reenvio_msj(mqd_t mqd, Msj *msj, char tipo)
 {
   switch(tipo) {
     case 'w':
-      enviar_espwr(mqd, 'w', msj->contador-1, msj->dato, msj->otrodato, msj->nombre, msj->texto);
+      enviarWR(mqd, 'w', msj->contador-1, msj->dato, msj->otrodato, msj->nombre, msj->texto);
       break;
     case 'r':
-      enviar_espwr(mqd, 'r', msj->contador-1, msj->dato, msj->otrodato, msj->nombre, msj->texto);
+      enviarWR(mqd, 'r', msj->contador-1, msj->dato, msj->otrodato, msj->nombre, msj->texto);
       break;
     default:
-      enviar_esp(mqd,tipo,msj->contador-1,msj->dato,msj->nombre);
+      enviar(mqd,tipo,msj->contador-1,msj->dato,msj->nombre);
       break;
   }
 }
 
-Msj* recibir_esp(mqd_t mqd)
+Msj* recibir(mqd_t mqd)
 {
   char *buff;
 
   if ((buff = (char *)malloc(MAXSIZE_COLA*sizeof(char))) == NULL)
     printf("Error no es posible recibir un msj por el anillo\n");
-
-  recibir(mqd, buff);
+  recibir_msj(mqd, buff);
   return (Msj *)buff;
 }
 
-void liberar_msj(Msj **msj)
+void liberar_msj(Msj *msj)
 {
-  if(*msj == NULL)
+  if(msj == NULL)
     return;
-  free(NULL);
-  free((*msj)->nombre);
-  free((*msj)->texto);
-  free(*msj);
+  free(msj->nombre);
+  free(msj->texto);
+  free(msj);
   msj = NULL;
 }
 

@@ -8,8 +8,7 @@
 #include "cabecera.h"   
 #include <errno.h>
 #include <limits.h>
-
-#define N_WORKER 5
+#include <stdlib.h>
 
 ListaDes *des= NULL;
 pthread_barrier_t barrier;
@@ -32,7 +31,7 @@ int main(int argc, char **argv)
 
   if(argc == 2) {
     errno = 0;
-    port = strtol (argv[1],&pEnd,10);
+    port = strtol(argv[1],&pEnd,10);
 
     if((errno == ERANGE && (port == LONG_MAX || port == LONG_MIN))
        || (errno != 0 && port == 0)) {
