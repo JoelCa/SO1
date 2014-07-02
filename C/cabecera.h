@@ -5,12 +5,19 @@
 #define N_WORKER 5
 
 typedef struct colas {
-  mqd_t cola_worker;
-  mqd_t cola_disp;
-  mqd_t cola_anillo;
-} Colas;
+  mqd_t worker;
+  mqd_t disp;
+  mqd_t anillo;
+} DescriptorColas;
 
-//listas.c
+typedef struct des_{
+  char *nombre;
+  int worker_c;
+  int worker_a;
+  int fd;
+  struct des_ *proximo;
+} DescriptorArchivo;
+
 typedef struct archivo_ {
   char *nombre;
   char *texto;
@@ -24,23 +31,15 @@ typedef struct lista_ {
   Archivo *inicio;
   Archivo *fin;
   int t;
-} Lista;
-
-typedef struct des_{
-  char *nombre;
-  int worker_c;
-  int worker_a;
-  int fd;
-  struct des_ *proximo;
-} Descriptor;
+  char worker;
+} ListaArchivos;
 
 typedef struct ListaDes {
-  Descriptor *inicio;
-  Descriptor *fin;
+  DescriptorArchivo *inicio;
+  DescriptorArchivo *fin;
   int t;
-} ListaDes;
+} ListaDescriptores;
 
-//mensajes.c
 typedef struct msj_{
   char tipo;
   char contador;
@@ -52,32 +51,41 @@ typedef struct msj_{
 
 
 //listas.c
-Lista *crear_lista(int n);
-int nuevo_archivo(Lista *lista, char *nombre);
-char* concatenar_archivos(Lista *lista);
-void visualizacion (Lista *lista);
-int eliminar_archivo(Lista *lista, char *nombre);
-int modificar_estado(Archivo *elem);
-Archivo *buscar_archivo(Lista *lista, char *nombre);
-///
-void crear_buff_des();
-int ins_descriptor(ListaDes *des, char *nombre, int worker_c, int worker_a);
-int del_descriptor(ListaDes *des, char *nombre);
-void imprimir_des(ListaDes *des);
-Descriptor *busca_des(ListaDes *des, char *dato, int descript, int tipo);
-///
-char *cola_cadena(char *token);
-char *sacar_nueva_linea(char *nombrex);
-///
-//Colas inicializar_cola(mqd_t worker, mqd_t disp, mqd_t anillo);
 
+//Operaciones sobre archivos
+ListaArchivos *crear_lista_archivos(int n);
+int nuevo_archivo(ListaArchivos *lista, char *nombre);
+int eliminar_archivo(ListaArchivos *lista, char *nombre);
+Archivo *buscar_archivo(ListaArchivos *lista, char *nombre);
+int modificar_estado(Archivo *arch);
+char* concatenar_archivos(ListaArchivos *lista);
+void imprimir_archivos (ListaArchivos *lista);
+
+
+//Operaciones sobre descriptores de archivos
+ListaDescriptores *crear_lista_descriptores();
+int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int worker_a);
+int borrar_descriptor(ListaDescriptores *des, char *nombre);
+DescriptorArchivo *buscar_descriptor(ListaDescriptores *des, char *dato, int descript, int tipo);
+void imprimir_descriptor(ListaDescriptores *des);
+
+///
+
+char *cola_cadena(char *token);
+char *sacar_nueva_linea(char *nombre);
+
+
+//Operadores sobre las colas de mensajes
+DescriptorColas *nueva_cola_mensaje(int worker, char tipo);
+void borrar_cola_mensaje(DescriptorColas* cola, int worker, char tipo);
+void imprimir_cola(DescriptorColas* cola);
 
 //mensajes.c
 mqd_t crear_cola(int cola);
 mqd_t nueva(char *nombre);
 mqd_t abrir(char *nombre);
 int cerrar(mqd_t cola);
-int borrar(mqd_t cola, char *nombre_cola);
+int borrar(char *nombre_cola);
 int atributos(mqd_t cola, char *nombre);
 void imprimir_msj(Msj *msj);
 void enviar(mqd_t mqd, char tipo, char contador, char dato, char *nombre);

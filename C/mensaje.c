@@ -15,6 +15,7 @@ mqd_t nueva(char *nombre)
 
   if ((cola = mq_open(nombre, O_CREAT | O_RDWR, S_IRWXU, &atributos)) == (mqd_t)-1)
     perror ("mq_open");
+  printf("nueva de %s retorna: %d\n", nombre, (int)cola);
   return cola;
 }
 
@@ -24,6 +25,7 @@ mqd_t abrir(char *nombre)
 
   if ((cola = mq_open(nombre, O_RDWR)) == (mqd_t)-1)
     perror("mq_open");
+  printf("abrir de %s, retorna: %d\n", nombre, (int)cola);
   return cola;
 }
 
@@ -47,9 +49,8 @@ int cerrar(mqd_t cola)
   return 0;
 }
 
-int borrar(mqd_t cola, char *nombre_cola)
+int borrar(char *nombre_cola)
 {
-  cerrar(cola);
   mq_unlink(nombre_cola);
   return 0;
 }
@@ -67,6 +68,7 @@ int atributos(mqd_t cola, char *nombre)
   return 0;
 }
 
+//Retorna el mqd de la cola creada (no la cierra)
 mqd_t crear_cola(int cola)
 {
   mqd_t mqd;
@@ -78,7 +80,7 @@ mqd_t crear_cola(int cola)
   //printf("creacion de la cola:  %s\n", buff);
   mq_unlink(buff);
   mqd = nueva(buff);
-  cerrar(mqd);
+  //cerrar(mqd);
   return mqd;
 }
 
@@ -95,7 +97,7 @@ void enviar(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
   msj->nombre = nombre;
   msj->texto = NULL;
   enviar_msj(mqd, (char *)msj);
-  free(msj);
+  //free(msj);
 }
 
 void enviarWR(mqd_t mqd, char tipo, char contador, char dato, int otrodato, char *nombre, char *texto)
@@ -105,6 +107,7 @@ void enviarWR(mqd_t mqd, char tipo, char contador, char dato, int otrodato, char
   msj->tipo = tipo;
   msj->contador = contador;
   msj->dato = dato;
+  printf("el \"otrodato\" es: %d\n", otrodato);
   msj->otrodato = otrodato;
   msj->nombre = nombre;
   msj->texto = texto;
@@ -148,10 +151,10 @@ void liberar_msj(Msj *msj)
 
 void imprimir_msj(Msj *msj)
 {
-  printf("%c\n",msj->tipo);
-  printf("%c\n",msj->contador);
-  printf("%c\n",msj->dato);
-  printf("%c\n",msj->otrodato);
+  printf("el tipo: %c\n",msj->tipo);
+  printf("el contador: %c\n",msj->contador);
+  printf("el dato: %c\n",msj->dato);
+  printf("el otrodato: %d\n",msj->otrodato);
   if(msj->nombre == NULL)
     printf("sin nombre\n");
   else
@@ -161,4 +164,54 @@ void imprimir_msj(Msj *msj)
   else
     printf("%s\n",msj->texto);
   printf("\n");
+}
+
+///////////////////////////
+
+DescriptorColas* nueva_cola_mensaje(int worker, char tipo)
+{
+  DescriptorColas *cola = (DescriptorColas*)malloc(sizeof(DescriptorColas));
+
+  switch(tipo) {
+    case 'w':
+      cola->worker = crear_cola(worker);
+      break;
+
+    case 'd':
+      cola->disp = crear_cola((worker+N_WORKER)%(2*N_WORKER));
+      break;
+  }
+  return cola;
+}
+
+void borrar_cola_mensaje(DescriptorColas* cola, int worker, char tipo)
+{
+  char nombre[7];
+
+  switch(tipo) {
+    case 'w':
+      cerrar(cola->worker);
+      cerrar(cola->anillo);
+      sprintf(nombre, "/cola%d", worker);
+      borrar(nombre);
+      break;
+
+    case 'd':
+      cerrar(cola->disp);
+      cerrar(cola->worker);
+      sprintf(nombre, "/cola%d", (worker+N_WORKER)%(2*N_WORKER));
+      borrar(nombre);
+      break;
+  }
+  free(cola);
+}
+
+void imprimir_cola(DescriptorColas* cola)
+{
+  if(cola != NULL) {
+    printf("cola worker: %d\n",(int)cola->worker);
+    printf("cola anillo: %d\n",(int)cola->anillo);
+    printf("cola dispatcher: %d\n",(int)cola->disp);
+    printf("\n");
+  }
 }

@@ -10,7 +10,7 @@
 #include <limits.h>
 #include <stdlib.h>
 
-ListaDes *des= NULL;
+ListaDescriptores *descriptores;
 pthread_barrier_t barrier;
 
 int main(int argc, char **argv)
@@ -47,7 +47,8 @@ int main(int argc, char **argv)
   else
     port = 8000;
 
-  crear_buff_des();
+  descriptores = crear_lista_descriptores();
+
   pthread_barrier_init(&barrier,NULL,N_WORKER);
 
   if((list_s = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {

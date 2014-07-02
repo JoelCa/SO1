@@ -4,11 +4,12 @@
 #include <pthread.h>
 #include "cabecera.h"
 
-extern ListaDes *des;
+extern ListaDescriptores *descriptores;
 extern int fd;
+
 pthread_mutex_t m;
 
-int lista_vacia(Lista *lista, char *nombre)
+int archivo_vacio(ListaArchivos *lista, char *nombre)
 {
   Archivo *ptr = (Archivo*)malloc(sizeof(Archivo));
 
@@ -30,12 +31,12 @@ int lista_vacia(Lista *lista, char *nombre)
 }
 
 //Agrega un archivo a la lista de archivos, al inicio
-int nuevo_archivo(Lista *lista, char *nombre)
+int nuevo_archivo(ListaArchivos *lista, char *nombre)
 {
   Archivo *ptr;
 
   if(lista->t == 0)
-    return lista_vacia(lista, nombre);
+    return archivo_vacio(lista, nombre);
   if((ptr = (Archivo*)malloc(sizeof(Archivo)))== NULL)
     return -1;
   if ((ptr->nombre = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
@@ -52,7 +53,7 @@ int nuevo_archivo(Lista *lista, char *nombre)
   return 0;
 }
 
-int eliminar_archivo(Lista *lista, char *nombre)
+int eliminar_archivo(ListaArchivos *lista, char *nombre)
 {
   Archivo *ptr = lista->inicio;
   Archivo *tmp = NULL;
@@ -96,7 +97,7 @@ int eliminar_archivo(Lista *lista, char *nombre)
   return 0;
 }
 
-Archivo *buscar_archivo(Lista *lista, char *nombre)
+Archivo *buscar_archivo(ListaArchivos *lista, char *nombre)
 {
   Archivo *ptr = lista->inicio;
 
@@ -109,21 +110,17 @@ Archivo *buscar_archivo(Lista *lista, char *nombre)
   return NULL;
 }
 
-Lista *crear_lista_archivos(int n)
+ListaArchivos *crear_lista_archivos(int n)
 {
-  //char *buff1, *buff2;
-  Lista *lista;
+  ListaArchivos *lista;
 
-  //buff1 = malloc(7*sizeof(char));
-  //buff2 = malloc(7*sizeof(char));
-  if ((lista = (Lista *)malloc (sizeof(Lista))) == NULL)
+  if ((lista = (ListaArchivos *)malloc (sizeof(ListaArchivos))) == NULL)
     printf("Error al crear el buffer del worker nº %d\n",n);
-  //sprintf(buff1, "/cola%d", n);
-  //sprintf(buff2, "/cola%d", n%N_WORKER+1);
 
   lista->inicio = NULL;
   lista->fin = NULL;
   lista->t = 0;
+  lista->worker = (char)(((int)'0')+n-1);
 
   return lista;
 }
@@ -146,7 +143,7 @@ void imprimir_arch(Archivo *arch)
     printf("\n");
 }
 
-void visualizacion (Lista *lista)
+void imprimir_archivos (ListaArchivos *lista)
 {
   Archivo *actual = lista->inicio;
 
@@ -161,18 +158,13 @@ void visualizacion (Lista *lista)
 
 //////////
 
-void inicializar_des(ListaDes *des)
-{
-  des->inicio = NULL;
-  des->fin = NULL;
-  des->t = 0;
-}
+//El acceso a la lista de descriptores debe ser atómica
 
-int ins_descriptor_vacio(ListaDes *des, char *nombre, int worker_c, int worker_a)
+int descriptor_vacio(ListaDescriptores *des, char *nombre, int worker_c, int worker_a)
 {
   int aux;
 
-  Descriptor *ptr = (Descriptor*)malloc(sizeof(Descriptor));
+  DescriptorArchivo *ptr = (DescriptorArchivo*)malloc(sizeof(DescriptorArchivo));
   
   if(ptr == NULL)
     return -1;
@@ -181,6 +173,7 @@ int ins_descriptor_vacio(ListaDes *des, char *nombre, int worker_c, int worker_a
   strcpy(ptr->nombre, nombre);
   ptr->worker_c = worker_c;
   ptr->worker_a = worker_a;
+  printf("el descriptor del archivo %s:\nworker_c: %d\n, worker_a: %d\n", nombre, worker_c,worker_a);
   ptr->fd = fd;
   ptr->proximo = NULL;
   pthread_mutex_lock(&m);
@@ -193,14 +186,14 @@ int ins_descriptor_vacio(ListaDes *des, char *nombre, int worker_c, int worker_a
   return aux;
 }
 
-int ins_descriptor(ListaDes *des, char *nombre, int worker_c, int worker_a)
+int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int worker_a)
 {
   int aux;
-  Descriptor *ptr;
+  DescriptorArchivo *ptr;
   
   if(des->t == 0)
-    return (ins_descriptor_vacio(des, nombre, worker_c, worker_a));
-  if((ptr = (Descriptor*)malloc(sizeof(Descriptor)))== NULL)
+    return (descriptor_vacio(des, nombre, worker_c, worker_a));
+  if((ptr = (DescriptorArchivo*)malloc(sizeof(DescriptorArchivo)))== NULL)
     return -1;
   if ((ptr->nombre = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
     return -1;
@@ -218,10 +211,10 @@ int ins_descriptor(ListaDes *des, char *nombre, int worker_c, int worker_a)
   return aux;
 }
 
-int del_descriptor(ListaDes *des, char *nombre)
+int borrar_descriptor(ListaDescriptores *des, char *nombre)
 {
-  Descriptor *ptr = des->inicio;
-  Descriptor *tmp = NULL;
+  DescriptorArchivo *ptr = des->inicio;
+  DescriptorArchivo *tmp = NULL;
 
   if(des->t==1) {
     des->inicio = NULL;
@@ -261,9 +254,9 @@ int del_descriptor(ListaDes *des, char *nombre)
 //el tipo puede ser:
 //- 0: busca por nombre
 //- >0: busca por fd
-Descriptor *busca_des(ListaDes *des, char *dato, int descript, int tipo)
+DescriptorArchivo *buscar_descriptor(ListaDescriptores *des, char *dato, int descript, int tipo)
 {
-  Descriptor *ptr = des->inicio;
+  DescriptorArchivo *ptr = des->inicio;
 
   if(tipo) {
     while(ptr != NULL) {
@@ -282,16 +275,23 @@ Descriptor *busca_des(ListaDes *des, char *dato, int descript, int tipo)
   return NULL;
 }
 
-void crear_buff_des()
+ListaDescriptores *crear_lista_descriptores()
 {
-    if ((des = (ListaDes *)malloc (sizeof(ListaDes))) == NULL)
-        printf("error al crear el buffer de descriptores\n");
-    inicializar_des(des);
+  ListaDescriptores *des;
+
+  if ((des = (ListaDescriptores *)malloc (sizeof(ListaDescriptores))) == NULL)
+    printf("error al crear el buffer de descriptores\n");
+
+  des->inicio = NULL;
+  des->fin = NULL;
+  des->t = 0;
+
+  return des;
 }
 
-void imprimir_des(ListaDes *des)
+void imprimir_descriptores(ListaDescriptores *des)
 {
-  Descriptor *actual = des->inicio;
+  DescriptorArchivo *actual = des->inicio;
 
   printf("Estado buff del descriptor:\n");
   if(actual == NULL)
@@ -331,7 +331,7 @@ char *sacar_nueva_linea(char *nombre)
   return copia;
 }
 
-char* concatenar_archivos(Lista *lista)
+char* concatenar_archivos(ListaArchivos *lista)
 {
   Archivo *ptr = lista->inicio;
   char *nombres, *aux;
@@ -381,12 +381,3 @@ char *cola_cadena(char *token)
   }
   return buff;
 }
-
-/*Colas *descriptor_cola(mqd_t *worker, mqd_t *disp, mqd_t *anillo)
-{
-
-  Colas *dc = (Colas*)malloc(sizeof(Colas));
-
-  if(worker != NULL)
-    dc->cola_worker
-    }*/
