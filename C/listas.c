@@ -9,34 +9,11 @@ extern int fd;
 
 pthread_mutex_t m;
 
-int archivo_vacio(ListaArchivos *lista, char *nombre)
-{
-  Archivo *ptr = (Archivo*)malloc(sizeof(Archivo));
-
-  if (ptr == NULL) {
-    return -1;}
-  if ((ptr->nombre = (char*)malloc(MAXSIZE_COLA * sizeof(char))) == NULL)
-    return -1;
-  if ((ptr->texto = (char*)malloc(MAXSIZE_COLA * sizeof(char))) == NULL)
-    return -1; 
-  strcpy(ptr->nombre, nombre);
-  ptr->estado = 0;
-  ptr->indice = 0;
-  ptr->tam = 0;
-  ptr->proximo = NULL;
-  lista->inicio = ptr;
-  lista->fin = ptr;
-  lista->t = 1;
-  return 0;
-}
-
 //Agrega un archivo a la lista de archivos, al inicio
 int nuevo_archivo(ListaArchivos *lista, char *nombre)
 {
   Archivo *ptr;
 
-  if(lista->t == 0)
-    return archivo_vacio(lista, nombre);
   if((ptr = (Archivo*)malloc(sizeof(Archivo)))== NULL)
     return -1;
   if ((ptr->nombre = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
@@ -48,6 +25,8 @@ int nuevo_archivo(ListaArchivos *lista, char *nombre)
   ptr->indice = 0;
   ptr->tam = 0;
   ptr->proximo = lista->inicio;
+  if(lista->t == 0)
+    lista->fin = ptr;
   lista->inicio = ptr;
   lista->t++;
   return 0;
@@ -160,39 +139,10 @@ void imprimir_archivos (ListaArchivos *lista)
 
 //El acceso a la lista de descriptores debe ser atómica
 
-int descriptor_vacio(ListaDescriptores *des, char *nombre, int worker_c, int worker_a)
-{
-  int aux;
-
-  DescriptorArchivo *ptr = (DescriptorArchivo*)malloc(sizeof(DescriptorArchivo));
-  
-  if(ptr == NULL)
-    return -1;
-  if ((ptr->nombre = (char *)malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-    return -1; 
-  strcpy(ptr->nombre, nombre);
-  ptr->worker_c = worker_c;
-  ptr->worker_a = worker_a;
-  printf("el descriptor del archivo %s:\nworker_c: %d\n, worker_a: %d\n", nombre, worker_c,worker_a);
-  ptr->fd = fd;
-  ptr->proximo = NULL;
-  pthread_mutex_lock(&m);
-  aux = fd;
-  fd++;
-  pthread_mutex_unlock(&m);
-  des->inicio = ptr;
-  des->fin = ptr;
-  des->t = 1;
-  return aux;
-}
-
 int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int worker_a)
 {
-  int aux;
   DescriptorArchivo *ptr;
   
-  if(des->t == 0)
-    return (descriptor_vacio(des, nombre, worker_c, worker_a));
   if((ptr = (DescriptorArchivo*)malloc(sizeof(DescriptorArchivo)))== NULL)
     return -1;
   if ((ptr->nombre = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
@@ -200,15 +150,16 @@ int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int wor
   strcpy(ptr->nombre, nombre);
   ptr->worker_c = worker_c;
   ptr->worker_a = worker_a;
-  ptr->fd = fd;
+
   pthread_mutex_lock(&m);
-  aux = fd;
+  ptr->fd = fd;
   fd++;
-  pthread_mutex_unlock(&m);
   ptr->proximo = des->inicio;
   des->inicio = ptr;
   des->t++;
-  return aux;
+  pthread_mutex_unlock(&m);
+
+  return ptr->fd;
 }
 
 int borrar_descriptor(ListaDescriptores *des, char *nombre)
@@ -216,12 +167,14 @@ int borrar_descriptor(ListaDescriptores *des, char *nombre)
   DescriptorArchivo *ptr = des->inicio;
   DescriptorArchivo *tmp = NULL;
 
+  pthread_mutex_lock(&m);
   if(des->t==1) {
     des->inicio = NULL;
     des->fin = NULL;
     des->t--;
     free(ptr->nombre);
     free(ptr);
+    pthread_mutex_unlock(&m);
     return 0;
   }
   while(ptr != NULL) {
@@ -241,6 +194,7 @@ int borrar_descriptor(ListaDescriptores *des, char *nombre)
       }
       free(ptr->nombre);
       free(ptr);
+      pthread_mutex_unlock(&m);
       return 0;
     }
     else {
@@ -248,6 +202,8 @@ int borrar_descriptor(ListaDescriptores *des, char *nombre)
       ptr = ptr->proximo;
     }
   }
+  pthread_mutex_unlock(&m);
+
   return -1;
 }
 
@@ -258,20 +214,27 @@ DescriptorArchivo *buscar_descriptor(ListaDescriptores *des, char *dato, int des
 {
   DescriptorArchivo *ptr = des->inicio;
 
+  pthread_mutex_lock(&m);
   if(tipo) {
     while(ptr != NULL) {
-      if(descript == ptr->fd)
+      if(descript == ptr->fd) {
+        pthread_mutex_unlock(&m);
         return ptr;
+      }
       ptr = ptr->proximo;
     }
   }
   else {
     while(ptr != NULL) {
-      if(strcmp(dato, ptr->nombre) == 0)
+      if(strcmp(dato, ptr->nombre) == 0) {
+        pthread_mutex_unlock(&m);
         return ptr;
+      }
       ptr = ptr->proximo;
     }
   }
+  pthread_mutex_unlock(&m);
+
   return NULL;
 }
 

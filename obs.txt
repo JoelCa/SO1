@@ -6,3 +6,8 @@ Hacer:
 
 -Agregar la estructura Colas en cabecera.h. Echo.
 -El acceso a la lista de descriptores debe ser atómica.
+-Unificar la función reenvio_por_anillo, en worker.c.
+
+Pregunta:
+
+1) ¿que pasa si hago pthread_mutex_unlock(&m) en una función luego de un return?. Se bloquea. Arreglado.

@@ -175,7 +175,6 @@ int evaluar_msj(DescriptorColas *cola, Msj *msj, ListaArchivos *lista, char *can
   if(msj->contador == '1') {
     switch(msj->tipo) {
       case 'l': //LSD
-        printf("casi\n");
         enviar(cola->disp, 'l', '0', 'f', msj->nombre);
         break;
 
@@ -333,7 +332,7 @@ void operadorWRT(int worker, DescriptorColas *cola, ListaArchivos *lista, Msj *m
 {
   Archivo *arch;
   
-  printf("EN WORKER %d:\nel msj->contador es: %c\n", worker, msj->contador);
+  //printf("EN WORKER %d:\nel msj->contador es: %c\n", worker, msj->contador);
   if(msj->contador -'0' == worker) {
     arch = buscar_archivo(lista, msj->nombre);
     strcat(arch->texto, msj->texto);
@@ -378,10 +377,13 @@ void operadorCLO(int worker, DescriptorColas *cola, ListaArchivos *lista, Msj *m
   Archivo *arch;
 
   if(msj->contador -'0' == worker) {
+    printf("ACA en worker %d\n", worker);
     arch = buscar_archivo(lista, msj->nombre);
     arch->estado = 0;
     arch->indice = 0;
+    printf("por enviar al dispatcher\n");
     enviar(cola->disp, 's', '0', '0', NULL);
+    printf("enviado\n");
   }
   else {
     enviar(cola->anillo,'s','5',msj->contador,msj->nombre);
@@ -412,7 +414,6 @@ void *fs (void * arg)
   //para que un worker abra una cola, despues de que halla sido creada
   pthread_barrier_wait(&barrier);
   
-  //cola_worker = abrir(cola);
   cola->anillo = abrir(cola_a);
 
   printf("la cola dispatcher del worker %d: %s\n", worker, cola_d);
