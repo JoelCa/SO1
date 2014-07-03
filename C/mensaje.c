@@ -107,7 +107,6 @@ void enviarWR(mqd_t mqd, char tipo, char contador, char dato, int otrodato, char
   msj->tipo = tipo;
   msj->contador = contador;
   msj->dato = dato;
-  printf("el \"otrodato\" es: %d\n", otrodato);
   msj->otrodato = otrodato;
   msj->nombre = nombre;
   msj->texto = texto;

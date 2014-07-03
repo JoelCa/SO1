@@ -13,163 +13,318 @@ extern pthread_barrier_t barrier;
 //ACTUALIZACIÓN: Ahora el worker NO crea la cola del dispatcher, solo la abre cada vez
 //que le llega un mensaje (como antes)
 
-void reenvio_por_anillo(DescriptorColas *cola, Msj *msj, ListaArchivos *lista, char *candidato)
+int esperar_respuesta(DescriptorColas *cola, ListaArchivos *lista, char *candidato);
+
+
+void operadorLSD(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
 {
-  char *buff;
-  Archivo *aux;
-  char worker;
-  int size;
-  
-  worker = lista->worker;
+  char *nombres;
 
-  switch(msj->tipo) {
-    case 'l': //LSD
-      if((buff = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-        printf("LSD: error\n");  
-      buff = concatenar_archivos(lista);
-      strcat(buff, msj->nombre);
-      enviar(cola->anillo, 'l', msj->contador-1, 'f', buff);
-      break;
+  if((nombres = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
+    printf("LSD: error\n");
+  nombres = concatenar_archivos(lista);
+  if(msj->dato != 'm') {
+    strcat(nombres, msj->nombre);
+    enviar(cola->anillo, 'l', msj->contador-1, 'f', nombres);
+  }
+  else {
+    enviar(cola->anillo,'l', '5', 'f', nombres);
+    esperar_respuesta(cola, lista, NULL);
+    free(nombres);
+  }
+}
 
-    case 'd': //DEL
-      switch(msj->dato) {
-        case 'f':
-          if((aux = buscar_archivo(lista, msj->nombre)) != NULL) {
-            if(aux->estado == 0) {
-              eliminar_archivo(lista,msj->nombre);
-              enviar(cola->anillo, 'd', msj->contador-1, 't', msj->nombre);
-            }
-            else {
-              enviar(cola->anillo, 'd', msj->contador-1, 'e', msj->nombre);
-            }
-          }
-          else
-            reenvio_msj(cola->anillo, msj, 'd');
-          break;
+void operadorDEL(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
+{
+  Archivo *arch;
 
-        default:
-          reenvio_msj(cola->anillo, msj, 'd');
-          break;
+  switch(msj->dato) {
+    case 'm':
+      if((arch = buscar_archivo(lista, msj->nombre)) != NULL) {
+        if(arch->estado == 0) {
+          eliminar_archivo(lista, msj->nombre);
+          enviar(cola->disp, 'd', '0', '0', NULL);
+        }
+        else
+          enviar(cola->disp, 'd', '0', 'e', NULL);
+      }
+      else {
+        enviar(cola->anillo,'d','5','f',msj->nombre);
+        esperar_respuesta(cola, lista, NULL);
       }
       break;
 
-    case 'c': //CRE
-      switch(msj->dato) {
-        case 'f':
-          if(buscar_archivo(lista, msj->nombre) != NULL) {
-            if(candidato == NULL)
-              enviar(cola->anillo, 'c',msj->contador-1,'t',msj->nombre);
-            else {
-              if(strcmp(candidato, msj->nombre) == 0)
-                enviar(cola->anillo,'c',msj->contador-1,'e',msj->nombre);
-              else
-                enviar(cola->anillo,'c',msj->contador-1,'t',msj->nombre);
-            }
-          }
-          else {
-            reenvio_msj(cola->anillo, msj, 'c');
-          }        
-          break;
-
-        default:
-          reenvio_msj(cola->anillo, msj, 'c');
-          break;
+    case 'f':
+      if((arch = buscar_archivo(lista, msj->nombre)) != NULL) {
+        if(arch->estado == 0) {
+          eliminar_archivo(lista,msj->nombre);
+          enviar(cola->anillo, 'd', msj->contador-1, 't', msj->nombre);
+        }
+        else {
+          enviar(cola->anillo, 'd', msj->contador-1, 'e', msj->nombre);
+        }
       }
+      else
+        reenvio_msj(cola->anillo, msj, 'd');
       break;
 
-    case 'o': //OPN
-      switch(msj->dato) {
-        case 'f':
-          aux = buscar_archivo(lista, msj->nombre);
-          if(aux != NULL) {
-            if(modificar_estado(aux))
-              enviar(cola->anillo,'o',msj->contador-1,worker,msj->nombre);
-            else
-              enviar(cola->anillo,'o',msj->contador-1,'e',msj->nombre);
-          }
-          else
-            enviar(cola->anillo,'o',msj->contador-1,msj->dato,msj->nombre);
-          break;
-
-        case 'e':
-          enviar(cola->anillo,'o',msj->contador-1,msj->dato,msj->nombre);
-          break;
-
-        default:
-          enviar(cola->anillo,'o',msj->contador-1,msj->dato,msj->nombre);
-          break;
-      }
-      break;
-
-    case 'w': //WRT
-      switch(msj->dato) {
-        case 't':
-          reenvio_msj(cola->anillo, msj, 'w');
-          break;
-
-        default:
-          if(worker == msj->dato) {
-            aux = buscar_archivo(lista, msj->nombre);
-            strcat(aux->texto, msj->texto);
-            aux->tam += msj->otrodato;
-            enviar(cola->anillo, 'w', msj->contador-1, 't', NULL);
-          }
-          else
-            reenvio_msj(cola->anillo, msj, 'w');
-          break;
-      }
-      break;
-
-    case 'r': //REA
-      switch(msj->dato) {
-        case 't':
-          reenvio_msj(cola->anillo, msj, 'r');
-          break;
-
-        default:
-          if(worker == msj->dato) {
-            aux = buscar_archivo(lista, msj->nombre);
-            if(aux->indice > aux->tam) {
-              enviar(cola->anillo, 'r', msj->contador-1, 't', NULL);
-            }
-            else {
-              size = MIN(msj->otrodato, aux->tam - aux->indice);
-              if((buff = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-                printf("REA: error\n");
-              memcpy(buff, &(aux->texto)[aux->indice], size);
-              buff[size] = '\0';
-              aux->indice +=  size;
-              enviarWR(cola->anillo, 'r', msj->contador-1, 't', size, buff, NULL);
-            }
-          }
-          else
-            reenvio_msj(cola->anillo, msj, 'r');
-          break;
-      }
-      break;
-
-    case 's': //CLO
-      switch(msj->dato) {
-        case 't':
-          reenvio_msj(cola->anillo, msj, 's');
-          break;
-
-        default:
-          if(worker == msj->dato) {
-            aux = buscar_archivo(lista, msj->nombre);
-            aux->estado = 0;
-            aux->indice = 0;
-            enviar(cola->anillo,'s',msj->contador-1,'t',NULL);
-          }
-          else
-            reenvio_msj(cola->anillo, msj, 's');
-          break;
-      }
+    default:
+      reenvio_msj(cola->anillo, msj, 'd');
       break;
   }
 }
 
 
+//Falta unificar este operador
+void operadorCRE(DescriptorColas *cola, ListaArchivos *lista, Msj *msj, char *candidato)
+{
+  switch(msj->dato) {
+    case 'm':
+      if(buscar_archivo(lista, msj->nombre) != NULL) {
+        enviar(cola->disp, 'c', '0', '1', NULL);
+      }
+      else {
+        enviar(cola->anillo,'c','5','f',msj->nombre);
+        esperar_respuesta(cola, lista, msj->nombre);
+      }
+      break;
+    case 'f':
+      if(buscar_archivo(lista, msj->nombre) != NULL) {
+        if(candidato == NULL)
+          enviar(cola->anillo, 'c',msj->contador-1,'t',msj->nombre);
+        else {
+          if(strcmp(candidato, msj->nombre) == 0)
+            enviar(cola->anillo,'c',msj->contador-1,'e',msj->nombre);
+          else
+            enviar(cola->anillo,'c',msj->contador-1,'t',msj->nombre);
+        }
+      }
+      else {
+        reenvio_msj(cola->anillo, msj, 'c');
+      }        
+      break;
+
+    default:
+      reenvio_msj(cola->anillo, msj, 'c');
+      break;
+  }
+}
+
+void operadorOPN(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
+{
+  Archivo *arch;
+
+  switch(msj->dato) {
+    case 'm':
+      if((arch = buscar_archivo(lista, msj->nombre)) != NULL) {
+        if(modificar_estado(arch)) 
+          enviar(cola->disp, 'o', lista->worker, '0', NULL);
+        else
+          enviar(cola->disp, 'o', '0', '1', NULL);
+      }
+      else {
+        enviar(cola->anillo,'o','5','f',msj->nombre);
+        esperar_respuesta(cola, lista, NULL);
+      }
+      break;
+
+    case 'f':
+      if((arch = buscar_archivo(lista, msj->nombre)) != NULL) {
+        if(modificar_estado(arch))
+          enviar(cola->anillo,'o',msj->contador-1,lista->worker,msj->nombre);
+        else
+          enviar(cola->anillo,'o',msj->contador-1,'e',msj->nombre);
+      }
+      else
+        enviar(cola->anillo,'o',msj->contador-1,msj->dato,msj->nombre);
+      break;
+
+    default:
+      reenvio_msj(cola->anillo, msj, 'o');
+      break;
+  }
+}
+
+void escribir_archivo(ListaArchivos *lista, Msj *msj)
+{
+  Archivo *arch;
+
+  arch = buscar_archivo(lista, msj->nombre);
+  strcat(arch->texto, msj->texto);
+  arch->tam += msj->otrodato; 
+}
+
+void operadorWRT(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
+{
+  char worker = lista->worker;
+
+  //printf("el msj->contador: %c\nel worker: %c\n", msj->contador, worker);
+  switch(msj->dato) {
+    case 'm':
+      if(msj->contador == worker) {
+        escribir_archivo(lista, msj);
+        enviar(cola->disp, 'w', '0', '0', NULL);
+      }
+      else {
+        //printf("se envia al anillo WRT, con msj->contador: %c\n",
+        //     msj->contador);
+        enviarWR(cola->anillo,'w','5',msj->contador, msj->otrodato, msj->nombre, msj->texto);
+        esperar_respuesta(cola, lista, NULL);
+      }
+      break;
+
+    case 't':
+      reenvio_msj(cola->anillo, msj, 'w');
+      break;
+
+    default:
+      if(worker == msj->dato) {
+        escribir_archivo(lista, msj);
+        enviar(cola->anillo, 'w', msj->contador-1, 't', NULL);
+      }
+      else
+        reenvio_msj(cola->anillo, msj, 'w');
+      break;
+  }
+}
+
+void leer_archivo(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
+{
+  int size;
+  char *texto;
+  Archivo *arch;
+
+  arch = buscar_archivo(lista, msj->nombre);
+  if(arch->indice > arch->tam) {
+    if(msj->dato == 'm')
+      enviar(cola->disp, 'r', '0', '0', NULL);
+    else { //enviar el msj por el anillo
+      //printf("se envia al anillo REA, con msj->contador: %c\nmsj->contador-1: %c\n",
+      //       msj->contador, msj->contador-1);
+      enviar(cola->anillo, 'r', msj->contador-1, 't', NULL);
+    }
+  }
+  else {
+    size = MIN(msj->otrodato, arch->tam - arch->indice);
+    if((texto = (char *) malloc(size * sizeof (char))) == NULL)
+      printf("REA: error\n");
+    memcpy(texto, &(arch->texto)[arch->indice], size);
+    texto[size] = '\0';
+    arch->indice += size;
+    if(msj->dato == 'm')
+      enviarWR(cola->disp,'r', '0', '0', size, texto, NULL);
+    else
+      enviarWR(cola->anillo, 'r', msj->contador-1, 't', size, texto, NULL);
+  
+  }
+}
+
+void operadorREA(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
+{
+  char worker = lista->worker;
+
+  printf("el msj->contador: %c\nel worker: %c\n", msj->contador, worker);
+  switch(msj->dato) {
+    case 'm':
+      if(msj->contador == worker)
+        leer_archivo(cola, lista, msj);
+      else {
+        enviarWR(cola->anillo,'r','5',msj->contador, msj->otrodato, msj->nombre, NULL);
+        esperar_respuesta(cola, lista, NULL);
+      }
+      break;
+
+    case 't':
+      reenvio_msj(cola->anillo, msj, 'r');
+      break;
+
+    default:
+      if(msj->dato == worker)
+        leer_archivo(cola, lista, msj);
+      else
+        reenvio_msj(cola->anillo, msj, 'r');
+      break;
+  }
+}
+
+void cerrar_archivo(ListaArchivos *lista, Msj *msj)
+{
+  Archivo *arch;
+
+  arch = buscar_archivo(lista, msj->nombre);
+  arch->estado = 0;
+  arch->indice = 0;
+}
+
+void operadorCLO(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
+{
+  char worker = lista->worker;
+
+  switch(msj->dato) {
+    case 'm':
+      if(msj->contador  == worker) {
+        cerrar_archivo(lista, msj);
+        enviar(cola->disp, 's', '0', '0', NULL);
+      }
+      else {
+        enviar(cola->anillo,'s','5',msj->contador,msj->nombre);
+        esperar_respuesta(cola, lista, NULL);
+      }
+      break;
+
+    case 't':
+      reenvio_msj(cola->anillo, msj, 's');
+      break;
+
+    default:
+      if(msj->dato == worker) {
+        cerrar_archivo(lista, msj);
+        enviar(cola->anillo,'s',msj->contador-1,'t',NULL);
+      }
+      else
+        reenvio_msj(cola->anillo, msj, 's');
+      break;
+  }
+
+}
+
+//Al mensaje que llega por el anillo, se le aplica el op. que corresponde.
+//El msj que se obtiene, es enviado por el anillo.
+void envio_por_anillo(DescriptorColas *cola, Msj *msj, ListaArchivos *lista, char *candidato)
+{
+  switch(msj->tipo) {
+    case 'l': //LSD
+      operadorLSD(cola, lista, msj);
+      break;
+
+    case 'd': //DEL
+      operadorDEL(cola, lista, msj);
+      break;
+
+    case 'c': //CRE
+      operadorCRE(cola, lista, msj, candidato);
+      break;
+
+    case 'o': //OPN
+      operadorOPN(cola, lista, msj);
+      break;
+
+    case 'w': //WRT
+      operadorWRT(cola, lista, msj);
+      break;
+
+    case 'r': //REA
+      operadorREA(cola, lista, msj);
+      break;
+
+    case 's': //CLO
+      operadorCLO(cola, lista, msj);
+      break;
+  }
+}
+
+//Evalua si el mensaje que recibe por el anillo, es la respuesta a su consulta o si
+//es un mensaje generado por la consulta de otro worker.
 int evaluar_msj(DescriptorColas *cola, Msj *msj, ListaArchivos *lista, char *candidato)
 {
   if(msj->contador == '1') {
@@ -249,148 +404,26 @@ int evaluar_msj(DescriptorColas *cola, Msj *msj, ListaArchivos *lista, char *can
     return 1;
   }
 
-  reenvio_por_anillo(cola, msj, lista, NULL);
+  envio_por_anillo(cola, msj, lista, NULL);
   liberar_msj(msj);
   return 0;
 }
 
-
-int recibir_msjs(DescriptorColas *cola, ListaArchivos *lista, char *candidato)
+//Una vez enviada la consulta del worker por el anillo, espera la respuesta.
+int esperar_respuesta(DescriptorColas *cola, ListaArchivos *lista, char *candidato)
 {
   Msj *msj;
 
   while(1) {
     msj = recibir(cola->worker);
-    printf("llego al worker inicial\n");
-    imprimir_cola(cola);
+    printf("------\nMensaje del worker %c, que espera una respuesta:\n", lista->worker);
     imprimir_msj(msj);
+    printf("------\n");
     if(evaluar_msj(cola, msj, lista, candidato))
       break;
   }
   return 0;
 }
-
-
-void operadorLSD(DescriptorColas *cola, ListaArchivos *lista)
-{
-  char *nombres;
-
-  if((nombres = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-    printf("LSD: error\n");
-  nombres = concatenar_archivos(lista);
-  enviar(cola->anillo,'l', '5', 'f', nombres);
-  recibir_msjs(cola, lista, NULL);
-  free(nombres);
-}
-
-void operadorDEL(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
-{
-  Archivo *arch;
-
-  if((arch = buscar_archivo(lista, msj->nombre)) != NULL) {
-    if(arch->estado == 0) {
-      eliminar_archivo(lista, msj->nombre);
-      enviar(cola->disp, 'd', '0', '0', NULL);
-    }
-    else
-      enviar(cola->disp, 'd', '0', 'e', NULL);
-  }
-  else {
-    enviar(cola->anillo,'d','5','f',msj->nombre);
-    recibir_msjs(cola, lista, NULL);
-  }
-}
-
-void operadorCRE(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
-{
-  if(buscar_archivo(lista, msj->nombre) != NULL) {
-    enviar(cola->disp, 'c', '0', '1', NULL);
-  }
-  else {
-    enviar(cola->anillo,'c','5','f',msj->nombre);
-    recibir_msjs(cola, lista, msj->nombre);
-  }
-}
-
-void operadorOPN(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
-{
-  Archivo *arch;
-  
-  if((arch = buscar_archivo(lista, msj->nombre)) != NULL) {
-    if(modificar_estado(arch)) 
-      enviar(cola->disp, 'o', lista->worker, '0', NULL);
-    else
-      enviar(cola->disp, 'o', '0', '1', NULL);
-  }
-  else {
-    enviar(cola->anillo,'o','5','f',msj->nombre);
-    recibir_msjs(cola, lista, NULL);
-  }
-}
-
-void operadorWRT(int worker, DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
-{
-  Archivo *arch;
-  
-  //printf("EN WORKER %d:\nel msj->contador es: %c\n", worker, msj->contador);
-  if(msj->contador -'0' == worker) {
-    arch = buscar_archivo(lista, msj->nombre);
-    strcat(arch->texto, msj->texto);
-    arch->tam += msj->otrodato;
-    enviar(cola->disp, 'w', '0', '0', NULL);
-  }
-  else {
-    enviarWR(cola->anillo,'w','5',msj->contador, msj->otrodato, msj->nombre, msj->texto);
-    recibir_msjs(cola, lista, NULL);
-  }
-}
-
-void operadorREA(int worker, DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
-{
-  int size;
-  char *texto;
-  Archivo *arch;
-
-  if(msj->contador -'0' == worker) {
-    arch = buscar_archivo(lista, msj->nombre);
-    if(arch->indice > arch->tam)
-      enviar(cola->disp, 'r', '0', '0', NULL);
-    else {
-      size = MIN(msj->otrodato, arch->tam - arch->indice);
-      if((texto = (char *) malloc(size * sizeof (char))) == NULL)
-        printf("REA: error\n");
-      memcpy(texto, &(arch->texto)[arch->indice], size);
-      texto[size] = '\0';
-      arch->indice += size;
-      enviarWR(cola->disp,'r', '0', '0', size, texto, NULL);
-      //free(texto);
-    }
-  }
-  else {
-    enviarWR(cola->anillo,'r','5',msj->contador, msj->otrodato, msj->nombre, NULL);
-    recibir_msjs(cola, lista, NULL);
-  }
-}
-
-void operadorCLO(int worker, DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
-{
-  Archivo *arch;
-
-  if(msj->contador -'0' == worker) {
-    printf("ACA en worker %d\n", worker);
-    arch = buscar_archivo(lista, msj->nombre);
-    arch->estado = 0;
-    arch->indice = 0;
-    printf("por enviar al dispatcher\n");
-    enviar(cola->disp, 's', '0', '0', NULL);
-    printf("enviado\n");
-  }
-  else {
-    enviar(cola->anillo,'s','5',msj->contador,msj->nombre);
-    recibir_msjs(cola, lista, NULL);
-  }
-}
-
 
 void *fs (void * arg)
 {
@@ -416,19 +449,21 @@ void *fs (void * arg)
   
   cola->anillo = abrir(cola_a);
 
-  printf("la cola dispatcher del worker %d: %s\n", worker, cola_d);
-  printf("la cola anillo del worker %d: %s\n", worker, cola_a);
+  //printf("la cola dispatcher del worker %d: %s\n", worker, cola_d);
+  //printf("la cola anillo del worker %d: %s\n", worker, cola_a);
 
   while(1) {
     msj = recibir(cola->worker);
+    printf("------\nmensaje del worker %d:\n", worker);
     imprimir_msj(msj);
-    printf("la cola del worker %d\n", worker);
+    printf("conjunto de colas del worker %d:\n", worker);
     imprimir_cola(cola);
+    printf("------\n");
     if(msj->dato == 'm') {
       cola->disp = abrir(cola_d);
       switch(msj->tipo) {
         case 'l': //LSD
-          operadorLSD(cola, lista);
+          operadorLSD(cola, lista, msj);
           break;
 
         case 'd': //DEL
@@ -436,7 +471,7 @@ void *fs (void * arg)
           break;
 
         case 'c': //CRE
-          operadorCRE(cola, lista, msj);
+          operadorCRE(cola, lista, msj, NULL);
           break;
 
         case 'o': //OPN
@@ -444,21 +479,21 @@ void *fs (void * arg)
           break;
 
         case 'w': //WRT
-          operadorWRT(worker, cola, lista, msj);
+          operadorWRT(cola, lista, msj);
           break;
 
         case 'r': //REA
-          operadorREA(worker, cola, lista, msj);
+          operadorREA(cola, lista, msj);
           break;
 
         case 's': //CLO
-          operadorCLO(worker, cola, lista, msj);
+          operadorCLO(cola, lista, msj);
           break;
       }
       cerrar(cola->disp);
     }
     else {
-      reenvio_por_anillo(cola, msj, lista, NULL);
+      envio_por_anillo(cola, msj, lista, NULL);
     }
   }
 
