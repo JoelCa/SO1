@@ -147,9 +147,48 @@ void dispatcherCRE(DescriptorColas *cola, long conn_s)
   }
 }
 
-void dispatcherOPN(DescriptorColas *cola, long conn_s)
+void dispatcherOPN(DescriptorColas *cola, long conn_s, int worker)
 {
-  return;
+  char *token;
+  char delims[] = " ";
+  char buffer[MAXSIZE_COLA];
+  Msj *msj;
+
+
+  if (((token = strtok(NULL, delims)) != NULL) && (strcmp(token, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
+    if (buscar_descriptor(descriptores, token, 0, 0) != NULL) {
+      sprintf(buffer,"ERROR EL ARCHIVO ESTA ABIERTO\n");
+      write(conn_s,buffer,strlen(buffer));
+    }
+    else {
+      enviar(cola->worker,'o','0','m',token);
+      msj = recibir(cola->disp);
+      switch(msj->dato) {
+        case '0':
+          sprintf(buffer,"OK FD %d\n", nuevo_descriptor(descriptores, token, msj->contador - '0', worker));
+          write(conn_s,buffer,strlen(buffer));
+          break;
+        case '1':
+          sprintf(buffer,"ERROR EL ARCHIVO ESTA ABIERTO\n");
+          write(conn_s,buffer,strlen(buffer));
+          break;
+        case '2':
+          sprintf(buffer,"ERROR EL ARCHIVO NO EXISTE\n");
+          write(conn_s,buffer,strlen(buffer));
+          break;
+      }
+      liberar_msj(msj);
+    }
+  }
+  else {
+    sprintf(buffer,"ERROR DE SINTAXIS\n");
+    write(conn_s,buffer,strlen(buffer));
+  }
+}
+
+void dispatcherWRT(DescriptorColas *cola, long conn_s, int worker)
+{
+
 }
 
 int proc_socket(char *a, long conn_s, int worker, DescriptorColas* cola)
@@ -182,35 +221,7 @@ int proc_socket(char *a, long conn_s, int worker, DescriptorColas* cola)
           break;
 
         case 4:      // OPN
-          if (((result = strtok(NULL, delims)) != NULL) && (strcmp(result, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
-            if (buscar_descriptor(descriptores, result, 0, 0) != NULL) {
-              sprintf(buffer,"ERROR EL ARCHIVO ESTA ABIERTO\n");
-              write(conn_s,buffer,strlen(buffer));
-            }
-            else {
-              enviar(cola->worker,'o','0','m',result);
-              msj = recibir(cola->disp);
-              switch(msj->dato) {
-                case '0':
-                  sprintf(buffer,"OK FD %d\n", nuevo_descriptor(descriptores, result,msj->contador - '0', worker));
-                  write(conn_s,buffer,strlen(buffer));
-                  break;
-                case '1':
-                  sprintf(buffer,"ERROR EL ARCHIVO ESTA ABIERTO\n");
-                  write(conn_s,buffer,strlen(buffer));
-                  break;
-                case '2':
-                  sprintf(buffer,"ERROR EL ARCHIVO NO EXISTE\n");
-                  write(conn_s,buffer,strlen(buffer));
-                  break;
-              }
-              liberar_msj(msj);
-            }
-          }
-          else {
-            sprintf(buffer,"ERROR DE SINTAXIS\n");
-            write(conn_s,buffer,strlen(buffer));
-          }
+          dispatcherOPN(cola, conn_s, worker);
           break;
         case 5:     //WRT
          i = 0;
