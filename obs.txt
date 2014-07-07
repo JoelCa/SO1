@@ -5,9 +5,11 @@ Observaciones:
 Hacer:
 
 -Agregar la estructura Colas en cabecera.h. Echo.
--El acceso a la lista de descriptores debe ser atómica.
--Unificar la función reenvio_por_anillo, en worker.c.
+-El acceso a la lista de descriptores debe ser atómica. Echo.
+-Unificar la función reenvio_por_anillo, en worker.c. Echo.
 -Ver si msj->contador -1, reduce reduce como corresponde al caracter. Echo, me fije en codificación ASCII.
+-Crear la función integer_to_char, para dispatcher.c. Echo.
+-Crear la función respuesta_cliente, que hace write al cliente. Echo.
 
 Pregunta:
 
