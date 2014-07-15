@@ -2,14 +2,15 @@
 -import(dispatcher, [inicio/2]).
 -compile(export_all).
 
-main() ->
+main(Puerto) ->
+    P = list_to_integer(atom_to_list(lists:nth(1, Puerto))),
     P1 =spawn(?MODULE, crearfs, []),
     P2 =spawn(?MODULE, crearfs, []),
     P3 =spawn(?MODULE, crearfs, []),
     P4 =spawn(?MODULE, crearfs, []),
     P5 =spawn(?MODULE, crearfs, []),
     enviarPids([P1,P2,P3,P4,P5]),
-    inicio(8000,[{P1,0},{P2,0},{P3,0},{P4,0},{P5,0}]).
+    inicio(P,[{P1,0},{P2,0},{P3,0},{P4,0},{P5,0}]).
 
 crearfs() ->
     receive

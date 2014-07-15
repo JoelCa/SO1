@@ -1,4 +1,4 @@
-#include <mqueue.h>
+ #include <mqueue.h>
 
 #define MAXMSG_COLA 5
 #define MAXSIZE_COLA 512

@@ -31,15 +31,15 @@ Este hilo también posee una cola de mensajes propia.
 Como muestra la Figura 1, cada \textit{worker} se comunica con los \textit{workers} adyacentes y un proceso socket (si existe).
 
 
-Ante una llamada al sistema, el proceso socket, enviará la consulta a la cola de mensajes del \textit{worker} X, elegido pseudoaleatoriamente.
+Ante una llamada al sistema, el proceso socket, enviará la consulta a la cola de mensajes del \textit{worker} X, elegido pseudoaleatoriamente
+entre los \textit{workers} que están desocupados.
 Luego, el \textit{worker} X responderá al pedido, enviando el resultado a la cola de mensajes del proceso socket,
 previo a emitir un mensaje por el anillo, para consultar a los demás workers, si es necesario.
 
-%LA IMÁGEN ESTA MAL: LA COLA EMPIEZA EN CERO
 
  \begin{figure}[htbp]
    \centering
-     \includegraphics[scale=0.75]{dia1.png}
+     \includegraphics[scale=0.75]{dia22.png}
      \caption{Comunicación en anillo entre \textit{workers}}
    \label{Figura 1}
  \end{figure}
@@ -248,6 +248,8 @@ En ambas implementaciones:
 %   \item No se acepta la creación de archivos con nombres que incluyan espacios.
 % 
 %   \item No son admisibles operaciones con caracteres cuya codificación en UTF-8 requiera más de un byte.
+  \item Asumo que cada \textit{worker}, atiende a lo sumo a un solo proceso en un momento dado. Por lo tanto, solo puede haber
+  hasta 5 clientes a la vez.
 
   \item Solo es posible la comunicación cliente-servidor mediante el protocolo telnet.
   
