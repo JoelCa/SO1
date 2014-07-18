@@ -23,24 +23,24 @@
 
 \subsection{Comunicación entre \textit{workers}}
 
-Creamos 5 hilos en el arranque del sistema, estos se encargan de realizar los pedidos del cliente, los llamamos \textit{workers}.
+Creamos 5 hilos en el arranque del sistema, encargados de realizar los pedidos del cliente, los llamamos \textit{workers}.
 Asignamos a cada \textit{worker} una cola de mensajes propia (utilizamos Posix Messages Queues para comunicar los a los \textit{workers} entre si).
 
 Cuando un cliente se conecta, lanzamos un hilo, el cual atiende los pedidos del cliente, \textit{proceso socket}.
 Este hilo también posee una cola de mensajes propia.
-Como muestra la Figura 1, cada \textit{worker} se comunica con los \textit{workers} adyacentes y un proceso socket (si existe).
+Como muestra la Figura 1, cada \textit{worker} se comunica con los \textit{workers} adyacentes y a lo sumo un proceso socket.
 
 
 Ante una llamada al sistema, el proceso socket, enviará la consulta a la cola de mensajes del \textit{worker} X, elegido pseudoaleatoriamente
-entre los \textit{workers} que están desocupados.
+entre los \textit{workers} que estén desocupados.
 Luego, el \textit{worker} X responderá al pedido, enviando el resultado a la cola de mensajes del proceso socket,
 previo a emitir un mensaje por el anillo, para consultar a los demás workers, si es necesario.
 
 
  \begin{figure}[htbp]
    \centering
-     \includegraphics[scale=0.75]{dia22.png}
-     \caption{Comunicación en anillo entre \textit{workers}}
+     \includegraphics[scale=0.75]{dia1.png}
+     \caption{Comunicación en anillo entre workers}
    \label{Figura 1}
  \end{figure}
 
@@ -63,7 +63,7 @@ Interpretamos a sus miembros de la siguiente manera:
 
 \begin{itemize}
   \item \texttt{tipo}: indica si se trata de un mensaje entre los \textit{workers}, o entre el proceso socket y un \textit{worker}.
-  \item \texttt{contador}: varia entre los caracteres \texttt{'0'} y \texttt{'5'}. Lo usamos para identificar al worker que tiene como destino.
+  \item \texttt{contador}: varia entre los caracteres \texttt{'0'} y \texttt{'5'}. Lo usamos para identificar al \textit{worker} que tiene como destino.
   \item \texttt{dato}: por lo general, indica el resultado de un pedido, si fue exitoso o no.
   \item \texttt{otrodato}: contiene el tamaño en bytes del miembro \texttt{texto}. Es útil para los operadores \texttt{REA} y \texttt{WRT}.
   \item \texttt{nombre}: el nombre de uno o varios archivos.
@@ -100,11 +100,12 @@ Interpretamos a sus miembros de la siguiente manera:
     \item La elección del descriptor de archivos.
     
     Creamos una función con el nombre \texttt{ins\_descriptor}, que retornar el valor de una variable global, antes de ser incrementada.
-    Cuando es llamada por el proceso socket, ante el pedido de apertura de un archivo, este hilo, utiliza el valor que obtiene de \texttt{ins\_descriptor} como descriptor de un archivo.
+    Cuando es llamada por el proceso socket, ante el pedido de apertura de un archivo, este hilo, utiliza el valor que obtiene de \texttt{ins\_descriptor} como el
+    descriptor de un archivo.
     
     \item Cerrar todos los archivos abiertos por un cliente.
     
-    Creamos una lista enlazada global: \texttt{descriptores}, mediante la estructura llamada \texttt{ListaDescriptores}. Contiene los nombres de todos los archivos abiertos, junto a los \textit{workers} a los pertenecen, entre otros datos.
+    Creamos una lista enlazada global: \texttt{descriptores}, mediante una estructura llamada \texttt{ListaDescriptores}. Contiene los nombres de todos los archivos abiertos, junto a los \textit{workers} a los pertenecen, entre otros datos.
     Creamos operadores que actúan sobre \texttt{ListaDescriptores}.
     En su implementación tuvimos en cuenta el uso de \textit{memory barriers}.
     Con la función \texttt{buscar\_descriptor}, podemos filtrar los nombres de los archivos abiertos por un cliente determinado que desee desconectarse, para luego cerrarlos.
@@ -162,23 +163,18 @@ Realizamos los siguientes puntos adicionales.
   \item Implementamos el operador \texttt{RM}, de la forma
   \texttt{RM ARG1}. El archivo \texttt{ARG1} será borrado una vez que ya no se mantenga abierto por ningún cliente.
   
-  \item Mensajería tolerante a fallas. Si un worker no responde al proceso socket, o el proceso socket no atiende
+  \item Mensajería tolerante a fallas. Si un \textit{worker} no responde al proceso socket, o el proceso socket no atiende
   al cliente, luego de aprox. 100 ms, el cliente recibirá el siguiente mensaje: \texttt{ERROR 62 ETIME}.
  
 \end{itemize}
 
   \subsection{Comunicación entre workers}
-  Reutilizamos parte del código del ejercicio 8, de la práctica de Erlang, en el cual debíamos implementar un Broadcaster.
-  Esto nos permite comunicar cada worker con todos los demás, mediante un único proceso (lo llamamos broadcaster).
-  
-  Cuando uno de los workers quiere consultar a lo otros, envía el pedido al broadcaster. Este se encarga de retransmitir el pedido
-  a los 4 workers restantes, y juntar las respuestas en un solo mensaje, que luego transfiere al worker
-  que inicio la consulta.
+  Cada \textit{worker} envía su consulta a todos los demás, y espera las respuestas de todos ellos para poder continuar.
   
  \begin{figure}[htbp]
    \centering
      \includegraphics[scale=0.75]{dia2}
-     \caption{Sistema de broadcast}
+     \caption{Comunicación de un worker}
    \label{Figura 2}
  \end{figure}
   
@@ -199,8 +195,8 @@ Realizamos los siguientes puntos adicionales.
   \item Atomo, que puede ser \texttt{true} o \texttt{false}. Indica si puede borrarse por pedido del operador \texttt{RM}.
   \item Atomo, que tiene el nombre del archivo.
   \item Buffer del archivo, una lista.
-  \item Lista de tuplas, con el índice de lectura asociado a un Pid (de un proceso socket).
-  \item Tamaño en bytes del buffer dado en el punto 4.
+  \item Lista de tuplas, con el índice de lectura asociado a un Pid (el de un proceso socket).
+  \item Tamaño en bytes del buffer del punto 4.
 \end{enumerate}
 
 \subsection{Problemas y soluciones}
@@ -228,7 +224,7 @@ Realizamos los siguientes puntos adicionales.
   
   Este problema surge a raíz de la implementación de uno de los puntos adicionales. Tenemos que mantener un índice de lectura para cada cliente,
   incluso si todos leen el mismo archivo.
-  Entonces, creamos en la tupla que representa un archivo, una lista de tuplas \{\texttt{P},\texttt{I}\} (como vimos en el sección 2.2).
+  Entonces, creamos en la tupla que representa un archivo, una lista de tuplas \{\texttt{P},\texttt{I}\} (como vimos en la sección 2.2).
   
   \begin{itemize}
     \item \texttt{P}: es un Pid.
@@ -248,8 +244,8 @@ En ambas implementaciones:
 %   \item No se acepta la creación de archivos con nombres que incluyan espacios.
 % 
 %   \item No son admisibles operaciones con caracteres cuya codificación en UTF-8 requiera más de un byte.
-  \item Asumo que cada \textit{worker}, atiende a lo sumo a un solo proceso en un momento dado. Por lo tanto, solo puede haber
-  hasta 5 clientes a la vez.
+  \item Cada \textit{worker}, realiza los pedidos de, a lo sumo, un proceso socket, en un momento dado. Por lo tanto, solo puede haber
+  hasta 5 clientes a la vez (un cliente para cada \textit{worker}).
 
   \item Solo es posible la comunicación cliente-servidor mediante el protocolo telnet.
   

@@ -2,8 +2,14 @@
 -import(dispatcher, [inicio/2]).
 -compile(export_all).
 
+main() ->
+    iniciarSist(8000).
+
 main(Puerto) ->
     P = list_to_integer(atom_to_list(lists:nth(1, Puerto))),
+    iniciarSist(P).
+
+iniciarSist(P) ->
     P1 =spawn(?MODULE, crearfs, []),
     P2 =spawn(?MODULE, crearfs, []),
     P3 =spawn(?MODULE, crearfs, []),
