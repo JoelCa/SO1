@@ -16,19 +16,18 @@ int nuevo_archivo(ListaArchivos *lista, char *nombre)
 
   if((ptr = (Archivo*)malloc(sizeof(Archivo)))== NULL)
     return -1;
-  if ((ptr->nombre = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
+  if ((ptr->nombre = (char *)calloc(MAXSIZE_COLA, sizeof (char))) == NULL) //DEBERIA SER MAX_TEXT
     return -1;
-  if ((ptr->texto = (char *)malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
+  if ((ptr->texto = (char *)calloc(MAXSIZE_COLA, sizeof (char))) == NULL) //DEBERIA SER MAX_TEXT
     return -1;
   strcpy(ptr->nombre, nombre);
   ptr->estado = 0;
   ptr->indice = 0;
   ptr->tam = 0;
   ptr->proximo = lista->inicio;
-  if(lista->t == 0)
-    lista->fin = ptr;
   lista->inicio = ptr;
   lista->t++;
+
   return 0;
 }
 
@@ -52,13 +51,11 @@ int eliminar_archivo(ListaArchivos *lista, char *nombre)
     return -1;
   if(lista->t==1) {
     lista->inicio = NULL;
-    lista->fin = NULL;
     lista->t--;
   }
   else {
     if(ptr->proximo == NULL) {
       tmp->proximo = NULL;
-      lista->fin = tmp;
       lista->t--;
     } else if(tmp == NULL) {
       lista->inicio = lista->inicio->proximo;
@@ -66,7 +63,6 @@ int eliminar_archivo(ListaArchivos *lista, char *nombre)
 
     } else {
       tmp->proximo = tmp->proximo->proximo;
-      lista->fin = ptr->proximo;
       lista->t--;
     }
   }
@@ -97,7 +93,6 @@ ListaArchivos *crear_lista_archivos(int n)
     printf("Error al crear el buffer del worker nº %d\n",n);
 
   lista->inicio = NULL;
-  lista->fin = NULL;
   lista->t = 0;
   lista->worker = (char)(((int)'0')+n-1);
 
@@ -146,7 +141,7 @@ int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int wor
   if((ptr = (DescriptorArchivo*)malloc(sizeof(DescriptorArchivo)))== NULL)
     return -1;
   if ((ptr->nombre = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-    return -1;
+   return -1;
   strcpy(ptr->nombre, nombre);
   ptr->worker_c = worker_c;
   ptr->worker_a = worker_a;
@@ -162,49 +157,59 @@ int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int wor
   return ptr->fd;
 }
 
-int borrar_descriptor(ListaDescriptores *des, char *nombre)
+//Borra el descriptor "nombre", y retorna el siguiente descriptor
+//del que fue borrado
+DescriptorArchivo *borrar_descriptor(ListaDescriptores *des, char *nombre)
 {
   DescriptorArchivo *ptr = des->inicio;
   DescriptorArchivo *tmp = NULL;
 
   pthread_mutex_lock(&m);
-  if(des->t==1) {
+
+  if(des->t == 1) {
     des->inicio = NULL;
-    des->fin = NULL;
     des->t--;
     free(ptr->nombre);
     free(ptr);
+
     pthread_mutex_unlock(&m);
-    return 0;
+    return NULL;
   }
+
   while(ptr != NULL) {
     if(strcmp(nombre, ptr->nombre) == 0) {
       if(ptr->proximo == NULL) {
         tmp->proximo = NULL;
-        des->fin = tmp;
-        des->t--;
-      } else if(tmp == NULL) {
-        des->inicio = des->inicio->proximo;
         des->t--;
       }
+      else if(tmp == NULL) {
+        des->inicio = des->inicio->proximo;
+        des->t--;
+        free(ptr->nombre);
+        free(ptr);
+
+        pthread_mutex_unlock(&m);
+        return des->inicio;
+
+      }
       else {
-        tmp->proximo = tmp->proximo->proximo;
-        des->fin = ptr->proximo;
+        tmp->proximo = ptr->proximo;
         des->t--;
       }
       free(ptr->nombre);
       free(ptr);
+
       pthread_mutex_unlock(&m);
-      return 0;
+      return tmp->proximo;
     }
     else {
       tmp = ptr;
       ptr = ptr->proximo;
     }
   }
-  pthread_mutex_unlock(&m);
 
-  return -1;
+  pthread_mutex_unlock(&m);
+  return NULL;
 }
 
 //el tipo puede ser:
@@ -246,7 +251,6 @@ ListaDescriptores *crear_lista_descriptores()
     printf("error al crear el buffer de descriptores\n");
 
   des->inicio = NULL;
-  des->fin = NULL;
   des->t = 0;
 
   return des;
@@ -281,13 +285,21 @@ int modificar_estado(Archivo *elem)
   return 0;
 }
 
+//Extrae los caracteres '\r' y '\n' de la string
 char *sacar_nueva_linea(char *nombre)
 {
   char *copia;
   int n;
 
+  int i;
+
+  printf("Sacar nueva línea: %s\n", nombre);
+  for(i = 0; nombre[i] != '\0'; i++)
+    printf("%d ", nombre[i]);
+  printf("\n");
   n = strlen(nombre)-2;
-  if((copia = (char *)malloc(n * sizeof (char))) == NULL)
+  printf("Sacar nueva línea: n %d\n", n);
+  if((copia = (char *)malloc((n+1) * sizeof (char))) == NULL)
     printf("Error al eliminar nueva linea\n");
   memcpy(copia, nombre, n);
   copia[n] = '\0';
@@ -299,7 +311,7 @@ char* concatenar_archivos(ListaArchivos *lista)
   Archivo *ptr = lista->inicio;
   char *nombres, *aux;
 
-  if((nombres = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
+  if((nombres = (char *) calloc(MAXSIZE_COLA, sizeof(char))) == NULL)
     printf("Error en la concatenación de nombres de archivos\n");
   while(ptr != NULL) {
     if(ptr->nombre != NULL) {

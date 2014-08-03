@@ -31,7 +31,7 @@ mqd_t abrir(char *nombre)
 
 int enviar_msj(mqd_t cola, char *mensaje)
 {
-  if(mq_send(cola, mensaje, MAXSIZE_COLA, 0) == -1) 
+  if(mq_send(cola, mensaje, sizeof(Msj), 0) == -1) 
     perror("mq_send");
   return 0;
 }
@@ -88,8 +88,17 @@ void enviar(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
 {
   Msj *msj;
 
-  if((msj = (Msj *) malloc(sizeof(Msj))) == NULL)
+  if((msj = (Msj *) calloc(1, sizeof(Msj))) == NULL)
     printf("Error al enviar mensaje\n");
+  /*printf("puntero del msj: %p\n", msj);
+  printf("puntero de msj->tipo: %p\n", &msj->tipo);
+  printf("puntero de msj->contador: %p\n", &msj->contador);
+  printf("puntero de msj->dato: %p\n", &msj->dato);
+  printf("puntero de msj->otrodato: %p\n", &msj->otrodato);
+  printf("puntero de msj->nombre: %p\n", &msj->nombre);
+  printf("puntero de msj->texto: %p\n", &msj->texto);
+  printf("tamaño de msj*: %d\n", (int)sizeof(Msj *));
+  printf("tamaño de char*: %d\n", (int)sizeof(char *));*/
   msj->tipo = tipo;
   msj->contador = contador;
   msj->dato = dato;
@@ -102,7 +111,7 @@ void enviar(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
 
 void enviarWR(mqd_t mqd, char tipo, char contador, char dato, int otrodato, char *nombre, char *texto)
 {
-  Msj *msj = (Msj *)malloc(sizeof(Msj));
+  Msj *msj = (Msj *)calloc(1, sizeof(Msj));
 
   msj->tipo = tipo;
   msj->contador = contador;
@@ -169,7 +178,7 @@ void imprimir_msj(Msj *msj)
 
 DescriptorColas* nueva_cola_mensaje(int worker, char tipo)
 {
-  DescriptorColas *cola = (DescriptorColas*)malloc(sizeof(DescriptorColas));
+  DescriptorColas *cola = (DescriptorColas*)calloc(1, sizeof(DescriptorColas));
 
   switch(tipo) {
     case 'w':
@@ -208,9 +217,12 @@ void borrar_cola_mensaje(DescriptorColas* cola, int worker, char tipo)
 void imprimir_cola(DescriptorColas* cola)
 {
   if(cola != NULL) {
-    printf("cola worker: %d\n",(int)cola->worker);
-    printf("cola anillo: %d\n",(int)cola->anillo);
-    printf("cola dispatcher: %d\n",(int)cola->disp);
+    if(cola->worker != 0)
+      printf("cola worker: %d\n",(int)cola->worker);
+    if(cola->anillo != 0)
+      printf("cola anillo: %d\n",(int)cola->anillo);
+    if(cola->disp != 0)
+      printf("cola dispatcher: %d\n",(int)cola->disp);
     printf("\n");
   }
 }

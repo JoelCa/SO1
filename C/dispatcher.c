@@ -335,11 +335,13 @@ void dispatcherBYE(DescriptorColas *cola, long conn_s, int worker)
     if(archivo->worker_a == worker) {
       enviar(cola->worker,'s',integer_to_char(archivo->worker_c),'m',archivo->nombre);
       msj = recibir(cola->disp);
-      borrar_descriptor(descriptores, archivo->nombre);
       liberar_msj(msj);
+      archivo = borrar_descriptor(descriptores, archivo->nombre);
+      continue;
     }
     archivo = archivo->proximo;
   }
+  //imprimir_descriptores(descriptores);
   responder_al_cliente(conn_s, "OK\n");
   close(conn_s);
 

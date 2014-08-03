@@ -206,7 +206,8 @@ void leer_archivo(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
   }
   else {
     size = MIN(msj->otrodato, arch->tam - arch->indice);
-    if((texto = (char *) malloc(size * sizeof (char))) == NULL)
+    printf("el size: %d, lo que se quiere leer %d\n", size, msj->otrodato);
+    if((texto = (char *) malloc((size+1) * sizeof (char))) == NULL)
       printf("REA: error\n");
     memcpy(texto, &(arch->texto)[arch->indice], size);
     texto[size] = '\0';

@@ -29,14 +29,12 @@ typedef struct archivo_ {
 
 typedef struct lista_ {
   Archivo *inicio;
-  Archivo *fin;
   int t;
   char worker;
 } ListaArchivos;
 
 typedef struct ListaDes {
   DescriptorArchivo *inicio;
-  DescriptorArchivo *fin;
   int t;
 } ListaDescriptores;
 
@@ -65,9 +63,9 @@ void imprimir_archivos (ListaArchivos *lista);
 //Operaciones sobre descriptores de archivos
 ListaDescriptores *crear_lista_descriptores();
 int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int worker_a);
-int borrar_descriptor(ListaDescriptores *des, char *nombre);
+DescriptorArchivo *borrar_descriptor(ListaDescriptores *des, char *nombre);
 DescriptorArchivo *buscar_descriptor(ListaDescriptores *des, char *dato, int descript, int tipo);
-void imprimir_descriptor(ListaDescriptores *des);
+void imprimir_descriptores(ListaDescriptores *des);
 
 ///
 
