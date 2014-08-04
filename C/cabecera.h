@@ -1,8 +1,8 @@
- #include <mqueue.h>
+#include <mqueue.h>
 
 #define MAXMSG_COLA 5
 #define MAXSIZE_COLA 512
-#define N_WORKER 5
+#define N_WORKER 5 //NO cambiar
 
 typedef struct colas {
   mqd_t worker;
@@ -57,7 +57,7 @@ int eliminar_archivo(ListaArchivos *lista, char *nombre);
 Archivo *buscar_archivo(ListaArchivos *lista, char *nombre);
 int modificar_estado(Archivo *arch);
 char* concatenar_archivos(ListaArchivos *lista);
-void imprimir_archivos (ListaArchivos *lista);
+void imprimir_archivos(ListaArchivos *lista);
 
 
 //Operaciones sobre descriptores de archivos

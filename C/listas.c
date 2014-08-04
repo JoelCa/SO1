@@ -291,14 +291,7 @@ char *sacar_nueva_linea(char *nombre)
   char *copia;
   int n;
 
-  int i;
-
-  printf("Sacar nueva línea: %s\n", nombre);
-  for(i = 0; nombre[i] != '\0'; i++)
-    printf("%d ", nombre[i]);
-  printf("\n");
   n = strlen(nombre)-2;
-  printf("Sacar nueva línea: n %d\n", n);
   if((copia = (char *)malloc((n+1) * sizeof (char))) == NULL)
     printf("Error al eliminar nueva linea\n");
   memcpy(copia, nombre, n);

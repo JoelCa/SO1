@@ -15,3 +15,4 @@ Pregunta:
 
 1) ¿que pasa si hago pthread_mutex_unlock(&m) en una función luego de un return?. Se bloquea. Arreglado.
 2) ¿puede haber dos clientes sobre el mismo worker, al mismo tiempo?. Si.
+3) ¿ante una interrupción en el servidor, deberia liberar todo su contenido?.

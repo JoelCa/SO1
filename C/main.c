@@ -5,23 +5,24 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
-#include "cabecera.h"   
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
+#include "cabecera.h"
 
 ListaDescriptores *descriptores;
 pthread_barrier_t barrier;
+char *bitmap_worker;
 
 int main(int argc, char **argv)
 {
   int i,list_s;
-  int num[5] = {1,2,3,4,5};
+  int num[N_WORKER] = {0};
   long conn_s = -1;
   struct sockaddr_in servaddr;
   pthread_t work, clientes;
   char * pEnd;
-  int port;
+  unsigned port;
 
 
   if(argc > 2) {
@@ -51,6 +52,10 @@ int main(int argc, char **argv)
 
   pthread_barrier_init(&barrier,NULL,N_WORKER);
 
+  bitmap_worker = (char *) calloc(N_WORKER, sizeof(char));
+
+  srand(time(NULL));
+
   if((list_s = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
     fprintf(stderr, "ECHOSERV: Error creating listening socket.\n");
     return -1;
@@ -70,8 +75,10 @@ int main(int argc, char **argv)
     fprintf(stderr, "ECHOSERV: Error calling listen()\n");
     return -1;													
   }
-  for(i=0;i<N_WORKER;i++)
+  for(i=0;i<N_WORKER;i++) {
+    num[i] = i+1;
     pthread_create(&work, NULL, fs, num+i);
+  }
   printf("Servidor aceptando clientes\n");
   while (1) {
     if((conn_s = accept(list_s, NULL, NULL) ) < 0 ) {

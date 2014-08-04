@@ -9,8 +9,9 @@
 
 pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 
-int fd = 1, nro_worker[5] = {1,2,3,4,5};
+int fd = 1;
 static char *operaciones[9] = {"CON\r\n","LSD\r\n", "DEL", "CRE", "OPN", "WRT", "REA", "CLO", "BYE\r\n"};
+extern char *bitmap_worker;
 extern ListaDescriptores *descriptores;
 
 int string_to_integer(char *to_convert);
@@ -25,32 +26,24 @@ void responder_al_cliente(int conn_s, char mensaje[])
 int eleccion_worker()
 {
   int i,j,n;
-  int aux[5];
+  int aux[N_WORKER] = {0};
 
-  srand(time(NULL));
-  for(i=0,j=0;i<5;i++)
-    if(nro_worker[i]>0) {
-
-      pthread_mutex_lock(&m);
-      aux[j] = nro_worker[i];
-      pthread_mutex_unlock(&m);
-
+  for(i=0,j=0;i<N_WORKER;i++) {
+    if(bitmap_worker[i]== 0) {
+      aux[j] = i;
       j++;
     }
+  }
   if(j==0)
     return -1;
   i = rand() % j;
   n = aux[i];
-  for(i=0;i<5;i++)
-    if(nro_worker[i]==n) {
 
-      pthread_mutex_lock(&m);
-      nro_worker[i] = 0;
-      pthread_mutex_unlock(&m);
+  pthread_mutex_lock(&m);
+  bitmap_worker[n] = 1;
+  pthread_mutex_unlock(&m);
 
-      break;
-    }
-  return n-1;
+  return n;
 }
 
 int iniciar_conexion(char *a, long conn_s)
@@ -344,10 +337,6 @@ void dispatcherBYE(DescriptorColas *cola, long conn_s, int worker)
   //imprimir_descriptores(descriptores);
   responder_al_cliente(conn_s, "OK\n");
   close(conn_s);
-
-  pthread_mutex_lock(&m);
-  nro_worker[worker] = worker+1;
-  pthread_mutex_unlock(&m);
 }
 
 int proc_socket(char *pedido, long conn_s, int worker, DescriptorColas* cola)
@@ -416,7 +405,6 @@ void *handle_client(void *arg)
   DescriptorColas *cola;
 
   printf("Un nuevo cliente\n");
-
   while(1) {
     res=read(conn_s,pedido,MAXSIZE_COLA);
     if (res<=0) {
@@ -443,7 +431,7 @@ void *handle_client(void *arg)
       close(conn_s);
 
       pthread_mutex_lock(&m);
-      nro_worker[worker] = worker+1;
+      bitmap_worker[worker] = 0;
       pthread_mutex_unlock(&m);
 
       borrar_cola_mensaje(cola, worker, 'd');
