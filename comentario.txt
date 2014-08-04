@@ -1,0 +1,164 @@
+No puedo comunicar 2 procesos por medio de posix messages queues, enviando estructuras como mensajes, sin que valgrid aborte.
+
+Comando en valgrid:
+
+valgrind --tool=memcheck --leak-check=full --show-reachable=yes ./servidor
+
+Dudas:
+
+1) Tengo que aceptar comando sin mayusculas?
+Por ej. wrt - rea.
+Aclarado en Observaciones.
+
+
+Problemas:
+
+1)Primero verificar que la sintaxis es correcta.
+Echo.
+
+2)Hay problemas en la longitud de los msj. con SIZE
+Parcialmente arreglado ! 
+-No acepta acentos
+Arreglado solo con cierta codificación
+
+3)Se puede mejorar la funcion cola_cadena.
+Echo.
+
+4)REA FD 1 SIZE 2 as, lo acepta
+Arreglado.
+
+5)descomentar los free de listas.c
+Echo.
+
+6)Si el cliente NO sale con BYE, (O SEA ctrl+Alt+])los archivos quedan abiertos.
+Arreglado.
+
+7)Crea archivos con el espacio. Por ej.
+CRE "espacio". Crea el archivo con nombre "espacio".
+Arreglado.
+
+8)No admitir espacios de mas en los operadores al final.
+Echo.
+
+9)Arreglar los if con los corchetes.
+No vale la pena.
+
+10) Hacer free de las cadenas que reservo espacio.
+Por eje. cola_cadena, o sacar_nueva_linea
+NO hay que hacerles FREE.
+
+11)Con la entrada:
+WRT FD 1 SIZE 493 Detroit, once a city of 1.8 million and the home of the American auto industry, has suffered a long descent into financial crisis. The city was home to just 713,000 people, according to the 2010 Census, a mere shadow of its post war apex. Huge pension costs and a recession that sent American automakers into their own financial tailspins exacerbated Detroit s budget gaps. On July 18, with Detroit facing an estimated 18 billion in debt and liabilities, it became the largest city in American
+
+me tiro 2 errores seguidos:
+ERROR TAMAÑO INCORRECTO
+ERROR DE SINTAXIS
+
+La cadena esa supera el limite de 512 bytes, entonces la función read en el dispatcher.c, divide la cadena
+en dos, produciendose el primer error por que tenemos una cadena mas córta y el segundo error por que la segunda
+cadena que se genera es la cola del texto recortado que no tiene el formato de un pedido.
+
+12) Agregar liberar_msj(&msj) en dispatcher y worker.
+Echo.
+
+13) Aceptar WRT FD 1 SIZE 0
+Echo.
+
+14) Arreglar FD y SIZE pueden NO ser enteros.
+Echo.
+
+15) problemas con el descriptor.
+Arreglado. Tenia una variable fd externo y otra fd interno que daban conflictos.
+
+16) WRT FD 1 SIZE 1
+ERROR DE SINTAXIS
+
+17) Error:
+CON
+OK ID 3
+CRE a
+OK
+OPN a
+OK FD 1
+CLO FD 1
+OK
+OPN a
+OK FD 2
+CLO FD 2
+ERROR FD INCORRECTO
+
+Arreglado.
+
+18) Error con lo devuelto con LSD.
+Con cierta combinación de comandos, LSD devolvio algunos nombres de archivos como caracteres no impribles.
+
+19) No logre comunicación sin ser localhost
+Arreglado.
+
+Observaciones:
+
+a) En el operador WRT: WRT FD ARG0 SIZE ARG1 ARG2
+ El buffer ARG2 considera a los espacios como uno solo.
+ Además se guarda el archivo sin salto de linea.
+
+b) No permito nombre de archivos con espacios.
+
+c) Guardos los nombres de los archivos con el '\r' y '\n'
+
+d) No admito caracteres cuya codificación en UTF-8 requiere más de un byte.
+
+e) un máximo de 492 caracteres mediante el comando WRT.
+Y un límite de 507 caracteres en el archivo.
+
+f) Los comandos solo van en mayusculas.
+
+g) No se admiten "espacios" al final de un comando
+
+
+
+Pruebas:
+
+The National Security Agency is gathering nearly 5 billion records a day on the whereabouts of cellphones around the world, according to top-secret documents and interviews with U.S. intelligence officials, enabling the agency to track the movements of individuals and map their relationships in ways that would have been previously unimaginable. The records feed a vast database that stores information about the locations of at least hundreds of millions of devices, according to the officials and the documents, which were provided
+
+
+CO-TRAVELER and related tools require the methodical collection and storage of location data on what amounts to a planetary scale. The government is tracking people from afar into confidential business meetings or personal visits to medical facilities, hotel rooms, private homes and other traditionally protected spaces. The NSA cannot know in advance which tiny fraction of 1 percent of the records it may need, so it collects and keeps as many as it can 27 terabytes, by one account, or more than double the text content of the Library of Congress s print collection.
+
+
+Probar:
+
+- ver el tema del cliente
+- probar C con valgrid
+- usar el servidor en distintas máquinas
+- REA FD 1 SIZE a
+- usar los msj de prueba
+----------------------------
+Probar V2:
+
+1) Ejemplos "localhost" en el serv. de C y Erlang
+
+2) Conectividad (usar serv. de C y Erlang):
+
+a)
+$ ping IP
+b)
+En el servidor (con el serv. corriendo):
+$ netstat -a | grep nro_de_puerto
+c)
+En el servidor:
+$ nc -l nro_de_puerto
+En el cliente:
+$ nc ip_servidor nro_de_puerto
+Combinar
+d)
+probar echo_server.c
+$ gcc echo_server.c -lpthread
+----------------------------
+Probar V3:
+1) dos clientes al mismo tiempo
+2) abrir un archivo y luego hacer BYE, y ver si se puede abrir de vuelta
+
+
+OBSERVACION:
+- si toco la tecla control, al iniciar una conexion, puede no producirse la conexión:
+  C^ON
+
