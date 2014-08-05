@@ -158,7 +158,7 @@ int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int wor
 }
 
 //Borra el descriptor "nombre", y retorna el siguiente descriptor
-//del que fue borrado
+//de "nombre"
 DescriptorArchivo *borrar_descriptor(ListaDescriptores *des, char *nombre)
 {
   DescriptorArchivo *ptr = des->inicio;

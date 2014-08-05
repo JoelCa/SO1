@@ -11,6 +11,7 @@ pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 
 int fd = 1;
 static char *operaciones[9] = {"CON\r\n","LSD\r\n", "DEL", "CRE", "OPN", "WRT", "REA", "CLO", "BYE\r\n"};
+
 extern char *bitmap_worker;
 extern ListaDescriptores *descriptores;
 
@@ -66,16 +67,14 @@ int iniciar_conexion(char *a, long conn_s)
   return -1;
 }
 
+
 void dispatcherLSD(DescriptorColas *cola, long conn_s)
 {
   char buffer[MAXSIZE_COLA];
   Msj *msj;
 
-  //printf("EN DISPATCHER:\n");
-  //imprimir_cola(cola);
   enviar(cola->worker,'l','0','m',NULL);
   msj = recibir(cola->disp);
-  //printf("dispatcher: llego mensaje\n");
   sprintf(buffer,"OK");
   strcat(buffer,msj->nombre);
   strcat(buffer,"\n");
@@ -150,7 +149,6 @@ void dispatcherOPN(DescriptorColas *cola, long conn_s, int worker)
   char delims[] = " ";
   char buffer[10];
   Msj *msj;
-
 
   if (((token = strtok(NULL, delims)) != NULL) && (strcmp(token, "\r\n") != 0) && (strtok(NULL, delims) == NULL)) {
     if (buscar_descriptor(descriptores, token, 0, 0) != NULL) {
@@ -334,7 +332,6 @@ void dispatcherBYE(DescriptorColas *cola, long conn_s, int worker)
     }
     archivo = archivo->proximo;
   }
-  //imprimir_descriptores(descriptores);
   responder_al_cliente(conn_s, "OK\n");
   close(conn_s);
 }

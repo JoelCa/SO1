@@ -8,11 +8,6 @@
 
 extern pthread_barrier_t barrier; 
 
-//IDEA VIEJA: antes de que cada worker reciba un mensaje:
-//Abre tanto la cola del dispatcher como la cola de su vecino, y las mantiene abiertas.
-//ACTUALIZACIÓN: Ahora el worker NO crea la cola del dispatcher, solo la abre cada vez
-//que le llega un mensaje (como antes)
-
 int esperar_respuesta(DescriptorColas *cola, ListaArchivos *lista, char *candidato);
 
 
@@ -75,7 +70,6 @@ void operadorDEL(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
 }
 
 
-//Falta unificar este operador
 void operadorCRE(DescriptorColas *cola, ListaArchivos *lista, Msj *msj, char *candidato)
 {
   switch(msj->dato) {
@@ -88,6 +82,7 @@ void operadorCRE(DescriptorColas *cola, ListaArchivos *lista, Msj *msj, char *ca
         esperar_respuesta(cola, lista, msj->nombre);
       }
       break;
+
     case 'f':
       if(buscar_archivo(lista, msj->nombre) != NULL) {
         if(candidato == NULL)
@@ -158,7 +153,6 @@ void operadorWRT(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
 {
   char worker = lista->worker;
 
-  //printf("el msj->contador: %c\nel worker: %c\n", msj->contador, worker);
   switch(msj->dato) {
     case 'm':
       if(msj->contador == worker) {
@@ -166,8 +160,6 @@ void operadorWRT(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
         enviar(cola->disp, 'w', '0', '0', NULL);
       }
       else {
-        //printf("se envia al anillo WRT, con msj->contador: %c\n",
-        //     msj->contador);
         enviarWR(cola->anillo,'w','5',msj->contador, msj->otrodato, msj->nombre, msj->texto);
         esperar_respuesta(cola, lista, NULL);
       }
@@ -198,15 +190,12 @@ void leer_archivo(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
   if(arch->indice > arch->tam) {
     if(msj->dato == 'm')
       enviar(cola->disp, 'r', '0', '0', NULL);
-    else { //enviar el msj por el anillo
-      //printf("se envia al anillo REA, con msj->contador: %c\nmsj->contador-1: %c\n",
-      //       msj->contador, msj->contador-1);
+    else {
       enviar(cola->anillo, 'r', msj->contador-1, 't', NULL);
     }
   }
   else {
     size = MIN(msj->otrodato, arch->tam - arch->indice);
-    printf("el size: %d, lo que se quiere leer %d\n", size, msj->otrodato);
     if((texto = (char *) malloc((size+1) * sizeof (char))) == NULL)
       printf("REA: error\n");
     memcpy(texto, &(arch->texto)[arch->indice], size);
@@ -224,7 +213,6 @@ void operadorREA(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
 {
   char worker = lista->worker;
 
-  printf("el msj->contador: %c\nel worker: %c\n", msj->contador, worker);
   switch(msj->dato) {
     case 'm':
       if(msj->contador == worker)
@@ -289,8 +277,8 @@ void operadorCLO(DescriptorColas *cola, ListaArchivos *lista, Msj *msj)
 
 }
 
-//Al mensaje que llega por el anillo, se le aplica el op. que corresponde.
-//El msj que se obtiene, es enviado por el anillo.
+//A partir del mensaje que llega por el anillo, aplica el procedimiento que corresponde.
+//Luego, genera un mensaje para enviarlo por el anillo.
 void envio_por_anillo(DescriptorColas *cola, Msj *msj, ListaArchivos *lista, char *candidato)
 {
   switch(msj->tipo) {
@@ -324,7 +312,7 @@ void envio_por_anillo(DescriptorColas *cola, Msj *msj, ListaArchivos *lista, cha
   }
 }
 
-//Evalua si el mensaje que recibe por el anillo, es la respuesta a su consulta o si
+//Evalua si el mensaje que recibe por el anillo, es la respuesta a su consulta, o si
 //es un mensaje generado por la consulta de otro worker.
 int evaluar_msj(DescriptorColas *cola, Msj *msj, ListaArchivos *lista, char *candidato)
 {
@@ -410,16 +398,16 @@ int evaluar_msj(DescriptorColas *cola, Msj *msj, ListaArchivos *lista, char *can
   return 0;
 }
 
-//Una vez enviada la consulta del worker por el anillo, espera la respuesta.
+//Una vez que el worker envia su consulta por el anillo, espera la respuesta.
 int esperar_respuesta(DescriptorColas *cola, ListaArchivos *lista, char *candidato)
 {
   Msj *msj;
 
   while(1) {
     msj = recibir(cola->worker);
-    printf("------\nMensaje del worker %c, que espera una respuesta:\n", lista->worker);
+    /*printf("------\nMensaje del worker %c, que espera una respuesta:\n", lista->worker);
     imprimir_msj(msj);
-    printf("------\n");
+    printf("------\n");*/
     if(evaluar_msj(cola, msj, lista, candidato))
       break;
   }
@@ -435,7 +423,7 @@ void *fs (void * arg)
   ListaArchivos *lista;
 
   worker = *(int *)arg;
-  //crear_cola(worker);
+
   lista = crear_lista_archivos(worker);
 
   worker--;
@@ -444,22 +432,19 @@ void *fs (void * arg)
 
   cola = nueva_cola_mensaje(worker, 'w');
   
-  //creo que esta barrera sirve
-  //para que un worker abra una cola, despues de que halla sido creada
+  //Esta barrera sirve para que un worker abra la cola de mensajes de su
+  //vecino y proceso socket, despues de que hallan sido creada
   pthread_barrier_wait(&barrier);
   
   cola->anillo = abrir(cola_a);
 
-  //printf("la cola dispatcher del worker %d: %s\n", worker, cola_d);
-  //printf("la cola anillo del worker %d: %s\n", worker, cola_a);
-
   while(1) {
     msj = recibir(cola->worker);
-    printf("------\nmensaje del worker %d:\n", worker);
+    /*printf("------\nmensaje del worker %d:\n", worker);
     imprimir_msj(msj);
     printf("conjunto de colas del worker %d:\n", worker);
     imprimir_cola(cola);
-    printf("------\n");
+    printf("------\n");*/
     if(msj->dato == 'm') {
       cola->disp = abrir(cola_d);
       switch(msj->tipo) {
