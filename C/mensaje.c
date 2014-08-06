@@ -3,14 +3,22 @@
 #include <string.h>
 #include "cabecera.h"
 
+#define MAXMSG_QUEUE 5
+#define MAXSIZE_QUEUE 512
+#define MAXSIZE_TEXT 256
+
+//-------------------------------------------------------
+//Operaciones que actuan sobre la cola de mensajes POSIX.
+//-------------------------------------------------------
+
 mqd_t nueva(char *nombre)
 {
   struct mq_attr atributos;
   mqd_t cola;
 
   printf("Se crea la cola: %s\n", nombre);
-  atributos.mq_maxmsg = MAXMSG_COLA;
-  atributos.mq_msgsize = MAXSIZE_COLA;
+  atributos.mq_maxmsg = MAXMSG_QUEUE;
+  atributos.mq_msgsize = MAXSIZE_QUEUE;
   atributos.mq_flags = 0;
 
   if ((cola = mq_open(nombre, O_CREAT | O_RDWR, S_IRWXU, &atributos)) == (mqd_t)-1)
@@ -38,7 +46,7 @@ int enviar_msj(mqd_t cola, char *mensaje)
 
 int recibir_msj(mqd_t cola, char *buf)
 {
-  if (mq_receive(cola, buf, MAXSIZE_COLA, NULL) == -1) 
+  if (mq_receive(cola, buf, MAXSIZE_QUEUE, NULL) == -1) 
     perror("mq_receive");
   return 0;
 }
@@ -68,7 +76,7 @@ int atributos(mqd_t cola, char *nombre)
   return 0;
 }
 
-//Retorna el mqd de la cola creada (no la cierra)
+//Retorna el mqd de la cola creada (no la cierra).
 mqd_t crear_cola(int cola)
 {
   mqd_t mqd;
@@ -77,12 +85,14 @@ mqd_t crear_cola(int cola)
   if((buff = (char *) malloc(7*sizeof(char))) == NULL)
      printf("Error al crear cola de mensajes");
   sprintf(buff, "/cola%d", cola);
-  //printf("creacion de la cola:  %s\n", buff);
   mq_unlink(buff);
   mqd = nueva(buff);
-  //cerrar(mqd);
   return mqd;
 }
+
+//-------------------------------------
+//Operaciones sobre la estructura: Msj.
+//-------------------------------------
 
 void enviar(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
 {
@@ -90,15 +100,6 @@ void enviar(mqd_t mqd, char tipo, char contador, char dato, char *nombre)
 
   if((msj = (Msj *) calloc(1, sizeof(Msj))) == NULL)
     printf("Error al enviar mensaje\n");
-  /*printf("puntero del msj: %p\n", msj);
-  printf("puntero de msj->tipo: %p\n", &msj->tipo);
-  printf("puntero de msj->contador: %p\n", &msj->contador);
-  printf("puntero de msj->dato: %p\n", &msj->dato);
-  printf("puntero de msj->otrodato: %p\n", &msj->otrodato);
-  printf("puntero de msj->nombre: %p\n", &msj->nombre);
-  printf("puntero de msj->texto: %p\n", &msj->texto);
-  printf("tamaño de msj*: %d\n", (int)sizeof(Msj *));
-  printf("tamaño de char*: %d\n", (int)sizeof(char *));*/
   msj->tipo = tipo;
   msj->contador = contador;
   msj->dato = dato;
@@ -141,7 +142,7 @@ Msj* recibir(mqd_t mqd)
 {
   char *buff;
 
-  if ((buff = (char *)malloc(MAXSIZE_COLA*sizeof(char))) == NULL)
+  if ((buff = (char *)malloc(MAXSIZE_QUEUE*sizeof(char))) == NULL)
     printf("Error no es posible recibir un msj por el anillo\n");
   recibir_msj(mqd, buff);
   return (Msj *)buff;
@@ -174,7 +175,9 @@ void imprimir_msj(Msj *msj)
   printf("\n");
 }
 
-///////////////////////////
+//-------------------------------------------------
+//Operaciones sobre la estructura: DescriptorColas.
+//-------------------------------------------------
 
 DescriptorColas* nueva_cola_mensaje(int worker, char tipo)
 {
@@ -186,7 +189,7 @@ DescriptorColas* nueva_cola_mensaje(int worker, char tipo)
       break;
 
     case 'd':
-      cola->disp = crear_cola((worker+N_WORKER)%(2*N_WORKER));
+      cola->disp = crear_cola((worker+NUM_WORKER)%(2*NUM_WORKER));
       break;
   }
   return cola;
@@ -207,7 +210,7 @@ void borrar_cola_mensaje(DescriptorColas* cola, int worker, char tipo)
     case 'd':
       cerrar(cola->disp);
       cerrar(cola->worker);
-      sprintf(nombre, "/cola%d", (worker+N_WORKER)%(2*N_WORKER));
+      sprintf(nombre, "/cola%d", (worker+NUM_WORKER)%(2*NUM_WORKER));
       borrar(nombre);
       break;
   }

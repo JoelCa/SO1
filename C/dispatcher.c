@@ -8,9 +8,8 @@
 #include "cabecera.h"
 
 pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
-
-int fd = 1;
 static char *operaciones[9] = {"CON\r\n","LSD\r\n", "DEL", "CRE", "OPN", "WRT", "REA", "CLO", "BYE\r\n"};
+int fd = 1;
 
 extern char *bitmap_worker;
 extern ListaDescriptores *descriptores;
@@ -27,9 +26,9 @@ void responder_al_cliente(int conn_s, char mensaje[])
 int eleccion_worker()
 {
   int i,j,n;
-  int aux[N_WORKER] = {0};
+  int aux[NUM_WORKER] = {0};
 
-  for(i=0,j=0;i<N_WORKER;i++) {
+  for(i=0,j=0;i<NUM_WORKER;i++) {
     if(bitmap_worker[i]== 0) {
       aux[j] = i;
       j++;
@@ -47,30 +46,9 @@ int eleccion_worker()
   return n;
 }
 
-int iniciar_conexion(char *a, long conn_s)
+void PS_operadorLSD(DescriptorColas *cola, long conn_s)
 {
-  char con[6] = "CON\r\n";
-  char buffer[10];
-  int i;
-
-  if (strcmp (a, con) == 0) {
-    i = eleccion_worker();
-    if(i == -1) {
-      responder_al_cliente(conn_s, "ERROR SERVIDOR SATURADO\n");
-    }
-    else {
-      sprintf(buffer,"OK ID %d\n", i);
-      responder_al_cliente(conn_s, buffer);
-      return i;
-    }
-  }
-  return -1;
-}
-
-
-void dispatcherLSD(DescriptorColas *cola, long conn_s)
-{
-  char buffer[MAXSIZE_COLA];
+  char buffer[MAXSIZE_TEXT];
   Msj *msj;
 
   enviar(cola->worker,'l','0','m',NULL);
@@ -82,7 +60,7 @@ void dispatcherLSD(DescriptorColas *cola, long conn_s)
   liberar_msj(msj);
 }
 
-void dispatcherDEL(DescriptorColas *cola, long conn_s)
+void PS_operadorDEL(DescriptorColas *cola, long conn_s)
 {
   char *token;
   char delims[] = " ";
@@ -113,7 +91,7 @@ void dispatcherDEL(DescriptorColas *cola, long conn_s)
   }
 }
 
-void dispatcherCRE(DescriptorColas *cola, long conn_s)
+void PS_operadorCRE(DescriptorColas *cola, long conn_s)
 {
   char *token;
   char delims[] = " ";
@@ -143,7 +121,7 @@ void dispatcherCRE(DescriptorColas *cola, long conn_s)
   }
 }
 
-void dispatcherOPN(DescriptorColas *cola, long conn_s, int worker)
+void PS_operadorOPN(DescriptorColas *cola, long conn_s, int worker)
 {
   char *token;
   char delims[] = " ";
@@ -179,7 +157,7 @@ void dispatcherOPN(DescriptorColas *cola, long conn_s, int worker)
   }
 }
 
-void dispatcherWRT(DescriptorColas *cola, long conn_s, int worker)
+void PS_operadorWRT(DescriptorColas *cola, long conn_s, int worker)
 {
   int i = 0, fd, size;
   char *token, *size_token;
@@ -238,11 +216,11 @@ void dispatcherWRT(DescriptorColas *cola, long conn_s, int worker)
   }
 }
 
-void dispatcherREA(DescriptorColas *cola, long conn_s, int worker)
+void PS_operadorREA(DescriptorColas *cola, long conn_s, int worker)
 {
   int i = 0, fd, size;
   char *token;
-  char buffer[MAXSIZE_COLA], delims[] = " ";
+  char buffer[MAXSIZE_TEXT], delims[] = " ";
   DescriptorArchivo *archivo;
   Msj *msj;
 
@@ -281,7 +259,7 @@ void dispatcherREA(DescriptorColas *cola, long conn_s, int worker)
   }
 }
 
-void dispatcherCLO(DescriptorColas *cola, long conn_s, int worker)
+void PS_operadorCLO(DescriptorColas *cola, long conn_s, int worker)
 {
   int i = 0, fd;
   char *token;
@@ -316,7 +294,7 @@ void dispatcherCLO(DescriptorColas *cola, long conn_s, int worker)
   }
 }
 
-void dispatcherBYE(DescriptorColas *cola, long conn_s, int worker)
+void PS_operadorBYE(DescriptorColas *cola, long conn_s, int worker)
 {
   DescriptorArchivo *archivo;
   Msj *msj;
@@ -336,7 +314,7 @@ void dispatcherBYE(DescriptorColas *cola, long conn_s, int worker)
   close(conn_s);
 }
 
-int proc_socket(char *pedido, long conn_s, int worker, DescriptorColas* cola)
+int evaluar_pedido(char *pedido, long conn_s, int worker, DescriptorColas* cola)
 {
   int i;
   char *token;
@@ -351,35 +329,35 @@ int proc_socket(char *pedido, long conn_s, int worker, DescriptorColas* cola)
           break;
 
         case 1:       // LSD
-          dispatcherLSD(cola, conn_s);
+          PS_operadorLSD(cola, conn_s);
           break;
 
         case 2:       // DEL
-          dispatcherDEL(cola, conn_s);
+          PS_operadorDEL(cola, conn_s);
           break;
 
         case 3:       // CRE
-          dispatcherCRE(cola, conn_s);
+          PS_operadorCRE(cola, conn_s);
           break;
 
         case 4:       // OPN
-          dispatcherOPN(cola, conn_s, worker);
+          PS_operadorOPN(cola, conn_s, worker);
           break;
 
         case 5:       // WRT
-          dispatcherWRT(cola, conn_s, worker);
+          PS_operadorWRT(cola, conn_s, worker);
           break;
 
         case 6:       // REA
-          dispatcherREA(cola, conn_s, worker);
+          PS_operadorREA(cola, conn_s, worker);
           break;
 
         case 7:       // CLO
-          dispatcherCLO(cola, conn_s, worker);
+          PS_operadorCLO(cola, conn_s, worker);
           break;
 
         case 8:       // BYE
-          dispatcherBYE(cola, conn_s, worker);
+          PS_operadorBYE(cola, conn_s, worker);
           return 1;
           break;
       }
@@ -394,16 +372,36 @@ int proc_socket(char *pedido, long conn_s, int worker, DescriptorColas* cola)
   return 0;
 }
 
-void *handle_client(void *arg)
+int iniciar_conexion(char *a, long conn_s)
+{
+  char con[6] = "CON\r\n";
+  char buffer[10];
+  int i;
+
+  if(strcmp (a, con) == 0) {
+    i = eleccion_worker();
+    if(i == -1) {
+      responder_al_cliente(conn_s, "ERROR SERVIDOR SATURADO\n");
+    }
+    else {
+      sprintf(buffer,"OK ID %d\n", i);
+      responder_al_cliente(conn_s, buffer);
+      return i;
+    }
+  }
+  return -1;
+}
+
+void *proceso_socket(void *arg)
 {
   long conn_s = *(long *)arg;
-  char pedido[MAXSIZE_COLA], cola_w[7];
+  char pedido[MAXSIZE_TEXT], cola_w[7];
   int res, worker;
   DescriptorColas *cola;
 
   printf("Un nuevo cliente\n");
   while(1) {
-    res=read(conn_s,pedido,MAXSIZE_COLA);
+    res=read(conn_s,pedido,MAXSIZE_TEXT);
     if (res<=0) {
       close(conn_s);
       break;
@@ -415,14 +413,13 @@ void *handle_client(void *arg)
       sprintf(cola_w, "/cola%d", worker);
       cola->worker = abrir(cola_w);
       while(1) {
-        res=read(conn_s,pedido,MAXSIZE_COLA);
-        if(res<=0) {
-          sprintf(pedido, "BYE\r\n"); //ante un error deben cerrarse los archivos del cliente
-          proc_socket(pedido, conn_s, worker, cola);
+        res=read(conn_s,pedido,MAXSIZE_TEXT);
+        if(res<=0) { //Ante un cierre inesperado deben cerrarse todos los archivos del cliente.
+          PS_operadorBYE(cola, conn_s, worker);
           break;
         }
         pedido[res]='\0';
-        if(proc_socket(pedido, conn_s, worker, cola))
+        if(evaluar_pedido(pedido, conn_s, worker, cola))
           break;
       }
       close(conn_s);
@@ -440,7 +437,6 @@ void *handle_client(void *arg)
   return NULL;
 }
 
-//regresa -1 si no es una string válida
 int string_to_integer(char *s)
 {
     char* p = s;

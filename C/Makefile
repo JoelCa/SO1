@@ -17,4 +17,4 @@ listas.o: listas.c cabecera.h
 	gcc -g -Wall -Wextra -c listas.c
 
 clean: 
-	rm servidor main.o dispatcher.o worker.o mensaje.o listas.o
+	rm -f servidor main.o dispatcher.o worker.o mensaje.o listas.o

@@ -4,21 +4,25 @@
 #include <pthread.h>
 #include "cabecera.h"
 
+pthread_mutex_t m;
+
 extern ListaDescriptores *descriptores;
 extern int fd;
 
-pthread_mutex_t m;
+//-----------------------------------------------------------
+//Operaciones sobre las estructuras: ListaArchivos y Archivo.
+//-----------------------------------------------------------
 
-//Agrega un archivo a la lista de archivos, al inicio
+//Agrega un archivo al inicio de la lista.
 int nuevo_archivo(ListaArchivos *lista, char *nombre)
 {
   Archivo *ptr;
 
   if((ptr = (Archivo*)malloc(sizeof(Archivo)))== NULL)
     return -1;
-  if ((ptr->nombre = (char *)calloc(MAXSIZE_COLA, sizeof (char))) == NULL) //DEBERIA SER MAX_TEXT
+  if ((ptr->nombre = (char *)calloc(MAXSIZE_TEXT, sizeof (char))) == NULL)
     return -1;
-  if ((ptr->texto = (char *)calloc(MAXSIZE_COLA, sizeof (char))) == NULL) //DEBERIA SER MAX_TEXT
+  if ((ptr->texto = (char *)calloc(MAXSIZE_TEXT, sizeof (char))) == NULL)
     return -1;
   strcpy(ptr->nombre, nombre);
   ptr->estado = 0;
@@ -99,7 +103,82 @@ ListaArchivos *crear_lista_archivos(int n)
   return lista;
 }
 
-void imprimir_arch(Archivo *arch)
+//Cierra el archivo, si estaba abierto. Si no, lo abre.
+int modificar_estado(Archivo *elem)
+{
+  if(elem->estado == 0) {
+    elem->estado = 1;
+    return 1;
+  }
+  return 0;
+}
+
+//Extrae los caracteres '\r' y '\n' de la string
+char *sacar_nueva_linea(char *nombre)
+{
+  char *copia;
+  int n;
+
+  n = strlen(nombre)-2;
+  if((copia = (char *)malloc((n+1) * sizeof (char))) == NULL)
+    printf("Error al eliminar nueva linea\n");
+  memcpy(copia, nombre, n);
+  copia[n] = '\0';
+  return copia;
+}
+
+//Función para concatenar los nombres de todos los archivos de una determinada lista.
+char* concatenar_archivos(ListaArchivos *lista)
+{
+  Archivo *ptr = lista->inicio;
+  char *nombres, *aux;
+
+  if((nombres = (char *) calloc(MAXSIZE_TEXT, sizeof(char))) == NULL)
+    printf("Error en la concatenación de nombres de archivos\n");
+  while(ptr != NULL) {
+    if(ptr->nombre != NULL) {
+      aux = sacar_nueva_linea(ptr->nombre);
+      strcat(nombres," ");
+      strcat(nombres,aux);
+    
+    }
+    ptr = ptr->proximo;
+  }
+  return nombres;
+}
+
+//Concatena todos los tokens, para obtener una única cadena.
+char *cola_cadena(char *token)
+{
+  char *buff, *buff0, *buff1, *buff2;
+  char delims[] = " ";
+
+  if((buff = (char *) calloc(MAXSIZE_TEXT, sizeof (char))) == NULL)
+    printf("Error\n");
+  if((buff0 = strtok(NULL, delims)) == NULL)
+    return sacar_nueva_linea(token);
+  strcat(buff,token);
+  buff2 = buff0;
+  while((buff1 = strtok(NULL, delims))!= NULL) {
+      strcat(buff, " ");
+      strcat(buff, buff0);
+      strcat(buff, " ");
+    if((buff2 = strtok(NULL, delims)) == NULL) {
+      strcat(buff,sacar_nueva_linea(buff1));
+      break;
+    }
+    strcat(buff, buff1);
+    buff0 = buff2;
+  }
+  if(buff1 == NULL) {
+    strcat(buff, " ");
+    strcat(buff,sacar_nueva_linea(buff2));
+  }
+  return buff;
+}
+
+
+void imprimir_un_archivo(Archivo *arch)
 {
   if(arch == NULL)
     printf("sin archivo\n");
@@ -125,14 +204,15 @@ void imprimir_archivos (ListaArchivos *lista)
     printf("Buffer Vacio\n");
   while (actual != NULL){
     printf ("%p - %s\n", actual, actual->nombre);
-    imprimir_arch(actual);
+    imprimir_un_archivo(actual);
     actual = actual->proximo;
   }
 }
 
-//////////
-
-//El acceso a la lista de descriptores debe ser atómica
+//---------------------------------------------------
+//Operaciones sobre la estructura: ListaDescriptores.
+//---------------------------------------------------
+//El acceso a la lista de descriptores debe ser atomica.
 
 int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int worker_a)
 {
@@ -140,7 +220,7 @@ int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int wor
   
   if((ptr = (DescriptorArchivo*)malloc(sizeof(DescriptorArchivo)))== NULL)
     return -1;
-  if ((ptr->nombre = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
+  if ((ptr->nombre = (char *) malloc(MAXSIZE_TEXT * sizeof (char))) == NULL)
    return -1;
   strcpy(ptr->nombre, nombre);
   ptr->worker_c = worker_c;
@@ -158,7 +238,7 @@ int nuevo_descriptor(ListaDescriptores *des, char *nombre, int worker_c, int wor
 }
 
 //Borra el descriptor "nombre", y retorna el siguiente descriptor
-//de "nombre"
+//de "nombre".
 DescriptorArchivo *borrar_descriptor(ListaDescriptores *des, char *nombre)
 {
   DescriptorArchivo *ptr = des->inicio;
@@ -212,9 +292,9 @@ DescriptorArchivo *borrar_descriptor(ListaDescriptores *des, char *nombre)
   return NULL;
 }
 
-//el tipo puede ser:
-//- 0: busca por nombre
-//- >0: busca por fd
+//Según el valor de tipo:
+// 0 => busca por nombre.
+// >0 => busca por fd.
 DescriptorArchivo *buscar_descriptor(ListaDescriptores *des, char *dato, int descript, int tipo)
 {
   DescriptorArchivo *ptr = des->inicio;
@@ -272,80 +352,4 @@ void imprimir_descriptores(ListaDescriptores *des)
     actual = actual->proximo;
   }
   printf("\n");
-}
-
-////////
-
-int modificar_estado(Archivo *elem)
-{
-  if(elem->estado == 0) {
-    elem->estado = 1;
-    return 1;
-  }
-  return 0;
-}
-
-//Extrae los caracteres '\r' y '\n' de la string
-char *sacar_nueva_linea(char *nombre)
-{
-  char *copia;
-  int n;
-
-  n = strlen(nombre)-2;
-  if((copia = (char *)malloc((n+1) * sizeof (char))) == NULL)
-    printf("Error al eliminar nueva linea\n");
-  memcpy(copia, nombre, n);
-  copia[n] = '\0';
-  return copia;
-}
-
-char* concatenar_archivos(ListaArchivos *lista)
-{
-  Archivo *ptr = lista->inicio;
-  char *nombres, *aux;
-
-  if((nombres = (char *) calloc(MAXSIZE_COLA, sizeof(char))) == NULL)
-    printf("Error en la concatenación de nombres de archivos\n");
-  while(ptr != NULL) {
-    if(ptr->nombre != NULL) {
-      aux = sacar_nueva_linea(ptr->nombre);
-      strcat(nombres," ");
-      strcat(nombres,aux);
-    
-    }
-    ptr = ptr->proximo;
-  }
-  return nombres;
-}
-
-char *cola_cadena(char *token)
-{
-  char *buff, *buff0, *buff1, *buff2;
-  char delims[] = " ";
-  int i;
-
-  if((buff = (char *) malloc(MAXSIZE_COLA * sizeof (char))) == NULL)
-    printf("Error\n");
-  for(i=0;i<MAXSIZE_COLA;i++)
-    buff[i] = '\0';
-  if((buff0 = strtok(NULL, delims)) == NULL)
-    return sacar_nueva_linea(token);
-  strcat(buff,token);
-  buff2 = buff0;
-  while((buff1 = strtok(NULL, delims))!= NULL) {
-      strcat(buff, " ");
-      strcat(buff, buff0);
-      strcat(buff, " ");
-    if((buff2 = strtok(NULL, delims)) == NULL) {
-      strcat(buff,sacar_nueva_linea(buff1));
-      break;
-    }
-    strcat(buff, buff1);
-    buff0 = buff2;
-  }
-  if(buff1 == NULL) {
-    strcat(buff, " ");
-    strcat(buff,sacar_nueva_linea(buff2));
-  }
-  return buff;
 }
