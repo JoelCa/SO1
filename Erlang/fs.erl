@@ -177,7 +177,8 @@ cambiarEstado(lye,Pid,{{lye,B},C,{D,E,F,G}}) when length(F) == 1->
 cambiarEstado(lye,Pid,{{lye,B},C,{D,E,F,G}}) ->
     {{l,B},C,{D,E,borrarPid(Pid,F),G}}.
 
-                                                %Setea la bandera para borrar un archivo, o puede borrarlo si está cerrado.
+                                                %Setea la bandera para borrar un archivo cuando se cierre,
+                                                %o puede borrarlo si ya está cerrado.
                                                 %Definida para RM.
 brm(_,[]) -> 
     {[],error1};
@@ -202,8 +203,7 @@ borrarPid(P,[X|T]) ->
     [X|borrarPid(P,T)].
 
 
-                                                %Determina si un archivo está en la lista de archivos,
-                                                %dado por el segundo argumento.
+                                                %Determina si un archivo está en la lista de archivos.
                                                 %Definida para CRE.
 busca(_,[]) ->
     false;

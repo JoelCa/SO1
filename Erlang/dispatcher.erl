@@ -284,8 +284,8 @@ borrarDes(N,P,[A|L]) ->
                                                 %-P es el Pid del worker que tiene el archivo.
                                                 %En el 3º caso del receive, "Flag" es una bandera
                                                 %con el fin de identificar si es invocada por el operador CLO.
-                                                %La utilizamos para conocer los archivos abiertos
-                                                %de todos los clientes.
+                                                %La utilizamos para obtener los descriptores de los archivos,
+                                                %y el pid del worker que tiene un determinado archivo.
 descriptor(Buff, I) ->
     receive 
         {des, ins, N, P, Pid} ->
