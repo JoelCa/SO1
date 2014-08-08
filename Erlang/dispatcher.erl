@@ -3,7 +3,7 @@
 
 inicio(Port,ListPids) ->
     {ok, ServerSocket} = gen_tcp:listen(Port,[{active,false}]),
-    P1 = spawn (?MODULE, listaDeWorkers, [ListPids]),
+    P1 = spawn (?MODULE, bitmapWorker, [ListPids]),
     register(listworker, P1),
     P2 = spawn(?MODULE, descriptor,[[],1]),
     register(desc, P2),
@@ -29,7 +29,7 @@ proc_socket(ClientS,W,List) ->
                     listworker ! {inactivo, Pid, self()},
                     receive
                         {numworker, N} ->
-                            io:format("Cliente desconectado: worker nº ~p\n", [N])
+                            io:format("Cliente desconectado: ID ~p\n", [N])
                     end
             end
     end.
@@ -42,7 +42,7 @@ proc_socket(ClientS,T,sinworker,List) ->
             receive
                 {worker, P, X} ->
                     gen_tcp:send(ClientS, lists:concat(["OK ID ",X, "\n"])),
-                    io:format("Un nuevo cliente conectado: worker nº ~p\n", [X]),
+                    io:format("Cliente conectado: ID ~p\n", [X]),
                     proc_socket(ClientS, P, List);
                 {workererror} ->
                     gen_tcp:send(ClientS, "ERROR SERVIDOR SATURADO\n"), proc_socket(ClientS, sinworker, List)
@@ -247,26 +247,26 @@ proc_socket(ClientS,T,W,List) ->
             gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, W, List)
     end.
 
-                                                %"listaDeWorkers" tiene un Buffer de tuplas de la forma
-                                                %{Pid1,0},{Pid2,0},...{Pid5,0}. 
+                                                %"bitmapWorker" tiene un Buffer de tuplas de la forma
+                                                %{Pid1,0},{Pid2,0},...{Pid5,0} al inicio.
                                                 %Si la segunda componente de la i-esima tupla es 1 el
                                                 %worker numero "i" esta activo, si es 0 esta inactivo.
-                                                %Me sirve para determinar que worker esta libre, para
-                                                %poder asignarlo a un nuevo cliente.
-listaDeWorkers(L) ->
+                                                %Nos permite determinar que worker esta libre, para
+                                                %asignarlo a un nuevo cliente.
+bitmapWorker(L) ->
     receive
         {activo, Pid} ->
             L2 = lists:filter(fun({_,Y}) -> Y==0 end, L), T = length(L2),
             if
                 T>0 ->
                     {P,_} = lists:nth(random:uniform(T), L2),
-                    Pid ! {worker, P, numero(P,L)}, listaDeWorkers(lists:map(fun({X,Y}) -> if X==P -> {X,1}; true -> {X,Y} end end, L));
+                    Pid ! {worker, P, numero(P,L)}, bitmapWorker(lists:map(fun({X,Y}) -> if X==P -> {X,1}; true -> {X,Y} end end, L));
                 true ->
-                    Pid ! {workererror}, listaDeWorkers(L)
+                    Pid ! {workererror}, bitmapWorker(L)
             end;
         {inactivo, PW, Pid} ->
             Pid ! {numworker, numero(PW,L)},
-            listaDeWorkers(lists:map(fun({X,Y}) -> if X==PW -> {X,0}; true -> {X,Y} end end, L))
+            bitmapWorker(lists:map(fun({X,Y}) -> if X==PW -> {X,0}; true -> {X,Y} end end, L))
     end.
 
 borrarDes(N,P,[{N,[{P,_}],_}|L]) ->
@@ -276,15 +276,16 @@ borrarDes(N,P,[{N,A,B}|L]) ->
 borrarDes(N,P,[A|L]) ->
     [A|borrarDes(N,P,L)].
 
-
-                                                %El arg. Buff es una lista de tuplas con el siguiente formato:
+                                                %"Buff" es una lista de tuplas {N, I, P}:
                                                 %-N corresponde al nombre del archivo.
-                                                %-I es una lista de tuplas con los pids del que abrio el archivo su FD asociado.
-                                                %-P1 es el Pid del worker que tiene el archivo.
-                                                %en el 3º caso del receive, "Flag" es una bandera
-                                                %para identificar si es invocada por el operador CLO.
-                                                %Me sirve para conocer los archivos arbiertos
-                                                %por todos los clientes.
+                                                %-I es una lista de tuplas {A, B}.
+                                                %   Donde A, es el pid del worker que tiene el archivo N abierto,
+                                                %   y B es el FD asociado.
+                                                %-P es el Pid del worker que tiene el archivo.
+                                                %En el 3º caso del receive, "Flag" es una bandera
+                                                %con el fin de identificar si es invocada por el operador CLO.
+                                                %La utilizamos para conocer los archivos abiertos
+                                                %de todos los clientes.
 descriptor(Buff, I) ->
     receive 
         {des, ins, N, P, Pid} ->
@@ -345,8 +346,7 @@ analizar_opn([_,X,M,Y]) ->
     end.
 
                                                 %"analizar" determina los posibles errores y el nombre del archivo, si existe,
-                                                %para el pedido dado en el 1º argumento, por los operadores WRT o REA.
-
+                                                %para el pedido, dado en el 1º argumento, por los operadores WRT o REA.
 
 analizar(T, rea) when length(T) /= 5 -> error2;
 analizar([_,_,_,_,"\r\n"], rea) -> error2;
@@ -392,7 +392,7 @@ analizar([_,"FD", X, "SIZE",Y|Z], wrt) ->
 analizar(_,wrt) -> error2.
 
                                                 %"nd" obtiene el nombre y pid asociado al descriptor FD.
-                                                %Invicada por "analizar", y por el op. CLO.
+                                                %Invocada por "analizar", y por el op. CLO.
 nd(FD,Flag) ->
     desc ! {des, Flag, FD, self()},
     receive

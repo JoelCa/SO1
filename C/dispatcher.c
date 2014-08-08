@@ -247,7 +247,7 @@ void PS_operadorREA(DescriptorColas *cola, long conn_s, int worker)
           sprintf(buffer,"OK SIZE %d %s\n",msj->otrodato, msj->nombre);
           responder_al_cliente(conn_s, buffer);
         }
-        //liberar_msj(msj);
+        liberar_msj(msj);
       }
       else {
         responder_al_cliente(conn_s, "ERROR EL ARCHIVO FUE ABIERTO POR OTRO USUARIO\n");
@@ -408,7 +408,7 @@ void *proceso_socket(void *arg)
     }
     pedido[res]='\0';
     if((worker = iniciar_conexion(pedido, conn_s)) >= 0) {
-      printf("Un nuevo cliente conectado: worker nº %d\n",worker);
+      printf("Cliente conectado: ID %d\n",worker);
       cola = nueva_cola_mensaje(worker, 'd');
       sprintf(cola_w, "/cola%d", worker);
       cola->worker = abrir(cola_w);
@@ -429,7 +429,7 @@ void *proceso_socket(void *arg)
       pthread_mutex_unlock(&m);
 
       borrar_cola_mensaje(cola, worker, 'd');
-      printf("Cliente desconectado: worker nº %d\n",worker);
+      printf("Cliente desconectado: ID %d\n",worker);
       break;
     }
   }

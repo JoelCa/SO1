@@ -177,7 +177,7 @@ cambiarEstado(lye,Pid,{{lye,B},C,{D,E,F,G}}) when length(F) == 1->
 cambiarEstado(lye,Pid,{{lye,B},C,{D,E,F,G}}) ->
     {{l,B},C,{D,E,borrarPid(Pid,F),G}}.
 
-                                                %Busca y setea la bandera , o puede borrar.
+                                                %Setea la bandera para borrar un archivo, o puede borrarlo si está cerrado.
                                                 %Definida para RM.
 brm(_,[]) -> 
     {[],error1};
@@ -202,7 +202,8 @@ borrarPid(P,[X|T]) ->
     [X|borrarPid(P,T)].
 
 
-                                                %Determina si el nombre del 1º arg. esta en la 2º arg.
+                                                %Determina si un archivo está en la lista de archivos,
+                                                %dado por el segundo argumento.
                                                 %Definida para CRE.
 busca(_,[]) ->
     false;
@@ -212,7 +213,7 @@ busca(X,[_|T]) ->
     busca(X,T).
 
 
-                                                %Busca y borra.
+                                                %Borra un archivo.
                                                 %Definida para DEL.
 bb(_,[]) -> 
     {[],error1};
@@ -226,8 +227,9 @@ bb(X,[Y|L]) ->
             {[Y|A],B}
     end.
 
-                                                %Busca y reemplaza.
-                                                %Definida para WRT
+                                                %Retorna una tripleta. En su 2º componente, se encuentra
+                                                %la porción de texto que se quiere leer de un archivo.
+                                                %Definida para REA.
 br(X,S,Pid,[{A,{_,X},{_,B,C,D}}|L]) ->
     List = lists:filter(fun({P,_}) -> P == Pid end, C),
     case List of
@@ -247,7 +249,7 @@ br(X,S,Pid,[Y|L]) ->
             {[Y|A],B,C}
     end.
 
-                                                %Abre el archivo dado en el 1º arg.
+                                                %Abre un archivo, dado por su nombre, en el 1º arg.
                                                 %Definida para OPN.
 abrir(_,_,_,[]) ->
     {[],error1};
@@ -262,8 +264,8 @@ abrir(X,M,P,[Y|L]) ->
         {A,B} -> {[Y|A],B}
     end.
 
-                                                %enviarMsj envia la consulta M a los demas worker, y
-                                                %devuelve una lista con las respuestas
+                                                %enviarMsj envía una consulta M a los demás workers, y
+                                                %devuelve una lista con sus respuestas.
 enviarMsj(M,L) ->
     enviarM(M,L),
     recibirMsj(length(L)).

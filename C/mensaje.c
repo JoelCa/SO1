@@ -4,8 +4,6 @@
 #include "cabecera.h"
 
 #define MAXMSG_QUEUE 5
-#define MAXSIZE_QUEUE 512
-#define MAXSIZE_TEXT 256
 
 //-------------------------------------------------------
 //Operaciones que actuan sobre la cola de mensajes POSIX.
@@ -16,14 +14,12 @@ mqd_t nueva(char *nombre)
   struct mq_attr atributos;
   mqd_t cola;
 
-  printf("Se crea la cola: %s\n", nombre);
   atributos.mq_maxmsg = MAXMSG_QUEUE;
-  atributos.mq_msgsize = MAXSIZE_QUEUE;
+  atributos.mq_msgsize = sizeof(Msj);
   atributos.mq_flags = 0;
 
   if ((cola = mq_open(nombre, O_CREAT | O_RDWR, S_IRWXU, &atributos)) == (mqd_t)-1)
     perror ("mq_open");
-  printf("nueva de %s retorna: %d\n", nombre, (int)cola);
   return cola;
 }
 
@@ -33,7 +29,6 @@ mqd_t abrir(char *nombre)
 
   if ((cola = mq_open(nombre, O_RDWR)) == (mqd_t)-1)
     perror("mq_open");
-  printf("abrir de %s, retorna: %d\n", nombre, (int)cola);
   return cola;
 }
 
@@ -46,7 +41,7 @@ int enviar_msj(mqd_t cola, char *mensaje)
 
 int recibir_msj(mqd_t cola, char *buf)
 {
-  if (mq_receive(cola, buf, MAXSIZE_QUEUE, NULL) == -1) 
+  if (mq_receive(cola, buf, sizeof(Msj), NULL) == -1) 
     perror("mq_receive");
   return 0;
 }
@@ -142,7 +137,7 @@ Msj* recibir(mqd_t mqd)
 {
   char *buff;
 
-  if ((buff = (char *)malloc(MAXSIZE_QUEUE*sizeof(char))) == NULL)
+  if ((buff = (char *)malloc(sizeof(Msj))) == NULL)
     printf("Error no es posible recibir un msj por el anillo\n");
   recibir_msj(mqd, buff);
   return (Msj *)buff;
@@ -160,10 +155,10 @@ void liberar_msj(Msj *msj)
 
 void imprimir_msj(Msj *msj)
 {
-  printf("el tipo: %c\n",msj->tipo);
-  printf("el contador: %c\n",msj->contador);
-  printf("el dato: %c\n",msj->dato);
-  printf("el otrodato: %d\n",msj->otrodato);
+  printf("El tipo: %c\n",msj->tipo);
+  printf("El contador: %c\n",msj->contador);
+  printf("El dato: %c\n",msj->dato);
+  printf("El otrodato: %d\n",msj->otrodato);
   if(msj->nombre == NULL)
     printf("sin nombre\n");
   else
@@ -221,11 +216,11 @@ void imprimir_cola(DescriptorColas* cola)
 {
   if(cola != NULL) {
     if(cola->worker != 0)
-      printf("cola worker: %d\n",(int)cola->worker);
+      printf("Cola worker: %d\n",(int)cola->worker);
     if(cola->anillo != 0)
-      printf("cola anillo: %d\n",(int)cola->anillo);
+      printf("Cola anillo: %d\n",(int)cola->anillo);
     if(cola->disp != 0)
-      printf("cola dispatcher: %d\n",(int)cola->disp);
+      printf("Cola dispatcher: %d\n",(int)cola->disp);
     printf("\n");
   }
 }

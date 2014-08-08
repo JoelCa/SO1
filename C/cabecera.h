@@ -1,7 +1,7 @@
 #include <mqueue.h>
 
-#define NUM_WORKER 4
-#define MAXSIZE_TEXT 256
+#define NUM_WORKER 5
+#define MAXSIZE_TEXT 512
 
 typedef struct colas {
   mqd_t worker;
