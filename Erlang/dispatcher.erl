@@ -3,8 +3,8 @@
 
 inicio(Port,ListPids) ->
     {ok, ServerSocket} = gen_tcp:listen(Port,[{active,false}]),
-    P1 = spawn (?MODULE, bitmapWorker, [ListPids]),
-    register(listworker, P1),
+    P1 = spawn (?MODULE, round, [ListPids, length(ListPids), 1, 0]),
+    register(workerselector, P1),
     P2 = spawn(?MODULE, descriptor,[[],1]),
     register(desc, P2),
     io:format("Servidor aceptando clientes\n"),
@@ -12,53 +12,52 @@ inicio(Port,ListPids) ->
 
 serv(ServerSocket) ->
     {ok, ClientSocket} = gen_tcp:accept(ServerSocket),
-    P = spawn (?MODULE, proc_socket, [ClientSocket,sinworker,[]]),
+    P = spawn (?MODULE, proc_socket, [ClientSocket,{sinworker,-1},[]]),
     gen_tcp:controlling_process(ClientSocket, P),
     serv(ServerSocket).
 
-proc_socket(ClientS,W,List) ->
+proc_socket(ClientS,Tuple,List) ->
     case gen_tcp:recv(ClientS,0) of
         {ok, Bin} ->
-            proc_socket(ClientS,Bin,W,List);
+            proc_socket(ClientS,Bin,Tuple,List);
         {error,closed} ->
-            case W of
-                sinworker ->
+            case Tuple of
+                {sinworker,_} ->
                     ok;
-                Pid -> 
+                {_, ID} -> 
                     salir(List),
-                    listworker ! {inactivo, Pid, self()},
-                    receive
-                        {numworker, N} ->
-                            io:format("Cliente desconectado: ID ~p\n", [N])
-                    end
+                    io:format("<- Cliente con ID ~p desconectado\n", [ID])
+                    %% receive
+                    %%     {numworker, N} ->
+                    %%         io:format("Cliente desconectado: ID ~p\n", [N])
+                    %% end
             end
     end.
 
 
-proc_socket(ClientS,T,sinworker,List) ->
-    case string:sub_word(T,1) of
+proc_socket(ClientS,Bin,{sinworker,_},List) ->
+    case string:sub_word(Bin,1) of
         "CON\r\n"->
-            listworker ! {activo, self()},
+            workerselector ! {getworker, self()},
             receive
                 {worker, P, X} ->
                     gen_tcp:send(ClientS, lists:concat(["OK ID ",X, "\n"])),
-                    io:format("Cliente conectado: ID ~p\n", [X]),
-                    proc_socket(ClientS, P, List);
+                    io:format("-> Cliente con ID ~p conectado\n", [X]),
+                    proc_socket(ClientS, {P,X}, List);
                 {workererror} ->
                     gen_tcp:send(ClientS, "ERROR SERVIDOR SATURADO\n"), proc_socket(ClientS, sinworker, List)
             end;
-        _ -> proc_socket(ClientS,sinworker,List)
+        _ -> proc_socket(ClientS,{sinworker,-1},List)
     end;
-proc_socket(ClientS,T,W,List) ->
+proc_socket(ClientS,T,{W,ID},List) ->
     Tokens = string:tokens(T, " "),
     case lists:nth(1,Tokens) of
         "CON\r\n" ->
-            gen_tcp:send(ClientS, "ERROR YA ESTA CONECTADO\n"), proc_socket(ClientS, W,List);
+            gen_tcp:send(ClientS, "ERROR YA ESTA CONECTADO\n"), proc_socket(ClientS, {W,ID},List);
         "BYE\r\n" ->
             salir(List),
             gen_tcp:send(ClientS, "OK\n"),
             gen_tcp:close(ClientS),
-            listworker ! {inactivo, W, self()},
             receive
                 {numworker, N} ->
                     io:format("Cliente desconectado: worker nº ~p\n", [N])
@@ -84,7 +83,7 @@ proc_socket(ClientS,T,W,List) ->
                             end
                     end
             end,
-            proc_socket(ClientS, W, List);
+            proc_socket(ClientS, {W,ID}, List);
         "LSD\r\n"->
             W ! {lsd, self()},
             receive
@@ -93,7 +92,7 @@ proc_socket(ClientS,T,W,List) ->
             after 100 ->
                     io:format("ERROR WORKER NO RESPONDE\n")
             end,
-            proc_socket(ClientS, W, List);
+            proc_socket(ClientS, {W,ID}, List);
         "DEL"  ->
             if
                 length(Tokens) > 2 ->
@@ -117,11 +116,11 @@ proc_socket(ClientS,T,W,List) ->
                             end
                     end
             end,
-            proc_socket(ClientS, W, List);
+            proc_socket(ClientS, {W,ID}, List);
         "OPN"  ->
             case analizar_opn(Tokens) of
                 error1 ->
-                    gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, W, List);
+                    gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, {W,ID}, List);
                 {M,X} ->
                     Y = lists:filter(fun({A,_,_}) -> A == X end, List),
                     case Y of
@@ -129,18 +128,18 @@ proc_socket(ClientS,T,W,List) ->
                             W ! {opn, X, M, self()},
                             receive
                                 {opn, error1} ->
-                                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO NO EXISTE\n"), proc_socket(ClientS, W, List);
+                                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO NO EXISTE\n"), proc_socket(ClientS, {W,ID}, List);
                                 {opn, error2} ->
-                                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO EN MODO RDWR POR OTRO USUARIO\n"), proc_socket(ClientS, W, List);
+                                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO EN MODO RDWR POR OTRO USUARIO\n"), proc_socket(ClientS, {W,ID}, List);
                                 {opn, P} ->
                                     desc ! {des, ins, X, P, self()},
                                     receive {des, I} -> gen_tcp:send(ClientS, lists:concat(["OK FD ",I,"\n"])) end,
-                                    proc_socket(ClientS, W, [{X,M,P}|List])
+                                    proc_socket(ClientS, {W,ID}, [{X,M,P}|List])
                             after 100 ->
                                     io:format("ERROR WORKER NO RESPONDE\n")
                             end;
                         _ ->
-                            gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO\n"), proc_socket(ClientS, W, List)
+                            gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO\n"), proc_socket(ClientS, {W,ID}, List)
                     end
             end;
         "WRT"  ->
@@ -168,7 +167,7 @@ proc_socket(ClientS,T,W,List) ->
                             end
                     end
             end,
-            proc_socket(ClientS, W, List);
+            proc_socket(ClientS, {W,ID}, List);
         "REA"  ->
             case analizar(Tokens, rea) of
                 error2 ->
@@ -186,13 +185,13 @@ proc_socket(ClientS,T,W,List) ->
                             io:format("ERROR WORKER NO RESPONDE\n")
                     end
             end,
-            proc_socket(ClientS, W, List);
+            proc_socket(ClientS, {W,ID}, List);
         "CLO" ->
             X = lists:nth(2,Tokens),
             if
                 length(Tokens) /= 3  ->
                     gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"),
-                    proc_socket(ClientS, W, List);
+                    proc_socket(ClientS, {W,ID}, List);
                 true ->
                     FD = fst(string:to_integer(lists:nth(3,Tokens))),
                     if
@@ -200,10 +199,10 @@ proc_socket(ClientS,T,W,List) ->
                             case nd(FD,1) of
                                 error3 ->
                                     gen_tcp:send(ClientS, "ERROR FD INCORRECTO\n"),
-                                    proc_socket(ClientS, W, List);
+                                    proc_socket(ClientS, {W,ID}, List);
                                 error4 ->
                                     gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO POR OTRO USUARIO\n"),
-                                    proc_socket(ClientS, W, List);
+                                    proc_socket(ClientS, {W,ID}, List);
                                 {N,P} ->
                                     [{A,M,B}] = lists:filter(fun({A,_,_}) -> A == N end, List),
                                     W ! {clo, N, M, P, self()},
@@ -212,11 +211,11 @@ proc_socket(ClientS,T,W,List) ->
                                     after 100 ->
                                             io:format("ERROR WORKER NO RESPONDE\n")
                                     end,
-                                    proc_socket(ClientS, W, List--[{A,M,B}])
+                                    proc_socket(ClientS, {W,ID}, List--[{A,M,B}])
                             end;
                         true  ->
                             gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"),
-                            proc_socket(ClientS, W, List)
+                            proc_socket(ClientS, {W,ID}, List)
                     end
             end;
         "RM" ->
@@ -242,32 +241,22 @@ proc_socket(ClientS,T,W,List) ->
                             end
                     end
             end,
-            proc_socket(ClientS, W, List);
+            proc_socket(ClientS, {W,ID}, List);
         _  -> 
-            gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, W, List)
+            gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, {W,ID}, List)
     end.
 
-                                                %"bitmapWorker" tiene un Buffer de tuplas de la forma
-                                                %{Pid1,0},{Pid2,0},...{Pid5,0} al inicio.
-                                                %Si la segunda componente de la i-esima tupla es 1 el
-                                                %worker numero "i" esta activo, si es 0 esta inactivo.
-                                                %Nos permite determinar que worker esta libre, para
-                                                %asignarlo a un nuevo cliente.
-bitmapWorker(L) ->
+                                                %round, mantiene una lista con los pids de los workers,
+                                                %para asociarlos con los procesos socket. Además mantiene
+                                                %un contador que será el ID del cliente.
+                                                %Los workers se asignan en ronda.
+round(L, N, I, ID) ->
     receive
-        {activo, Pid} ->
-            L2 = lists:filter(fun({_,Y}) -> Y==0 end, L), T = length(L2),
-            if
-                T>0 ->
-                    {P,_} = lists:nth(random:uniform(T), L2),
-                    Pid ! {worker, P, numero(P,L)}, bitmapWorker(lists:map(fun({X,Y}) -> if X==P -> {X,1}; true -> {X,Y} end end, L));
-                true ->
-                    Pid ! {workererror}, bitmapWorker(L)
-            end;
-        {inactivo, PW, Pid} ->
-            Pid ! {numworker, numero(PW,L)},
-            bitmapWorker(lists:map(fun({X,Y}) -> if X==PW -> {X,0}; true -> {X,Y} end end, L))
+        {getworker, Pid} ->
+            Pid ! {worker, lists:nth(I, L), ID},
+            round(L, N, (I rem N) + 1, ID +1)
     end.
+
 
 borrarDes(N,P,[{N,[{P,_}],_}|L]) ->
     L;

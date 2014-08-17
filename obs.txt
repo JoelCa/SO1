@@ -1,6 +1,7 @@
 Observaciones:
 
 -Cada worker crea su cola de mensajes desde el momento en que se conecta.
+-En la última versión cambie MAXSIZE_QUEUE por size(Msj), y descomente el liberar_msj() del operador REA.
 
 Hacer:
 

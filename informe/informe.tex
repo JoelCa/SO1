@@ -21,10 +21,11 @@
 
 \section{Implementación en C con POSIX Threads}
 
-\subsection{Comunicación entre \textit{workers}}
+\subsection{Comunicación entre workers}
 
-Creamos 5 hilos en el arranque del sistema, encargados de realizar los pedidos del cliente, los llamamos \textit{workers}.
-Asignamos a cada \textit{worker} una cola de mensajes propia (utilizamos Posix Messages Queues para comunicar los a los \textit{workers} entre si).
+Creamos 5 hilos en el arranque del sistema, encargados de realizar los pedidos del cliente, \textit{workers}.
+Asignamos a cada \textit{worker} una cola de mensajes propia (utilizamos Posix Messages Queues para comunicar a los \textit{workers} entre si,
+y un a \textit{worker} con el proceso socket correspondiente).
 
 Cuando un cliente se conecta, lanzamos un hilo, el cual atiende los pedidos del cliente, \textit{proceso socket}.
 Este hilo también posee una cola de mensajes propia.
@@ -63,7 +64,7 @@ Interpretamos a sus miembros de la siguiente manera:
 
 \begin{itemize}
   \item \texttt{tipo}: indica si se trata de un mensaje entre los \textit{workers}, o entre el proceso socket y un \textit{worker}.
-  \item \texttt{contador}: varia entre los caracteres \texttt{'0'} y \texttt{'5'}. Lo usamos para identificar al \textit{worker} que tiene como destino.
+  \item \texttt{contador}: varia entre los caracteres \texttt{'1'} y \texttt{'5'}. Lo usamos para identificar al \textit{worker} que tiene como destino.
   \item \texttt{dato}: por lo general, indica el resultado de un pedido, si fue exitoso o no.
   \item \texttt{otrodato}: contiene el tamaño en bytes del miembro \texttt{texto}. Es útil para los operadores \texttt{REA} y \texttt{WRT}.
   \item \texttt{nombre}: el nombre de uno o varios archivos.
@@ -101,7 +102,7 @@ Interpretamos a sus miembros de la siguiente manera:
     
     Creamos una función con el nombre \texttt{ins\_descriptor}, que retornar el valor de una variable global, antes de ser incrementada.
     Cuando es llamada por el proceso socket, ante el pedido de apertura de un archivo, este hilo, utiliza el valor que obtiene de \texttt{ins\_descriptor} como el
-    descriptor de un archivo.
+    descriptor del archivo.
     
     \item Cerrar todos los archivos abiertos por un cliente.
     
@@ -150,7 +151,7 @@ Interpretamos a sus miembros de la siguiente manera:
 
 \section{Implementación en Erlang}
 
-Realizamos los siguientes puntos adicionales.
+En Erlang, realizamos los siguientes puntos adicionales.
 
 \begin{itemize}
   \item Permitimos la apertura de sólo lectura y sólo escritura, dejando múltiples aperturas en modo lectura, y a lo sumo
@@ -169,7 +170,8 @@ Realizamos los siguientes puntos adicionales.
 \end{itemize}
 
   \subsection{Comunicación entre workers}
-  Cada \textit{worker} envía su consulta a todos los demás, y espera las respuestas de todos ellos para poder continuar.
+  Al igual que la implementación en \texttt{C}, lanzamos 5 hilos.
+  Un \textit{worker} envía su consulta a cada uno de los restantes \textit{workers}, y luego espera las respuestas de todos ellos para continuar.
   
  \begin{figure}[htbp]
    \centering
@@ -216,7 +218,7 @@ Realizamos los siguientes puntos adicionales.
     \item \texttt{P}: Pid del \textit{worker} que tiene el archivo \texttt{N}.
   \end{itemize}
   
-  Pasamos la lista por argumento a la función \texttt{proc\_socket}, para de mantener los
+  Pasamos la lista por argumento a la función \texttt{proc\_socket}, para mantener los
   nombres de los archivos abiertos, junto a los FS a los que pertenecen.
   Luego, cada archivo que se abre o cierra, añade o elimina respectivamente, un elemento de la lista, con el fin de mantenerla actualizada.
   
@@ -244,7 +246,7 @@ En ambas implementaciones:
 %   \item No se acepta la creación de archivos con nombres que incluyan espacios.
 % 
 %   \item No son admisibles operaciones con caracteres cuya codificación en UTF-8 requiera más de un byte.
-  \item Cada \textit{worker}, realiza los pedidos de, a lo sumo, un proceso socket, en un momento dado. Por lo tanto, solo puede haber
+  \item Cada \textit{worker}, realiza los pedidos de a lo sumo un solo proceso socket, en un momento dado. Por lo tanto, solo puede haber
   hasta 5 clientes a la vez (un cliente para cada \textit{worker}).
 
   \item Solo es posible la comunicación cliente-servidor mediante el protocolo telnet.
@@ -257,15 +259,13 @@ En ambas implementaciones:
 En la implementación en C:
 
 \begin{itemize}
-  \item El buffer de cada archivo tiene un límite de 507 bytes de almacenamiento.
+  \item El buffer de cada archivo tiene un límite de aproximadamente 500 bytes de almacenamiento.
   
   %Solo es posible enviar un pedido de escritura (mediante el op. \texttt{WRT}), donde el buffer \texttt{ARG2} tenga un tamaño de lo sumo 492 caracteres.
 \end{itemize}
 
-\section{Integrantes}
+\section{Integrante}
 \begin{itemize}
   \item Catacora, Joel.
-  \item Ciunne, Melina.
-  \item Oviedo, Juan Manuel.
 \end{itemize}
 \end{document}

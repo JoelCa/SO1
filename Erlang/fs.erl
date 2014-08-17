@@ -10,19 +10,25 @@ main(Puerto) ->
     iniciarSist(P).
 
 iniciarSist(P) ->
-    P1 =spawn(?MODULE, crearfs, []),
-    P2 =spawn(?MODULE, crearfs, []),
-    P3 =spawn(?MODULE, crearfs, []),
-    P4 =spawn(?MODULE, crearfs, []),
-    P5 =spawn(?MODULE, crearfs, []),
-    enviarPids([P1,P2,P3,P4,P5]),
-    inicio(P,[{P1,0},{P2,0},{P3,0},{P4,0},{P5,0}]).
+    List = lanzarWorker(5,[]),
+    distribuirPids(List),
+    inicio(P,List).
+
+
+lanzarWorker(0, List) ->
+    P = spawn(?MODULE, crearfs, []),
+    [P|List];
+lanzarWorker(N, List) ->
+    P = spawn(?MODULE, crearfs, []),
+    lanzarWorker(N-1,[P|List]).
 
 crearfs() ->
     receive
         {listwork, L} ->
             fs([],L)
     end.
+
+%"Procesando" es una lista de la forma {Pid del ProcesoSocker, Lista de resultados, La longitud de la esa lista}
 
 fs(Buff,LW) ->
     receive
@@ -279,11 +285,12 @@ enviarM(_,[]) ->
 recibirMsj(0) -> [];
 recibirMsj(N) -> receive {rmsj, X} -> [X|recibirMsj(N-1)] end.
 
-enviarPids(L) -> enviarPids(L,length(L)).
+                                                %Envia a cada worker, los pids de los demás
+distribuirPids(L) -> distribuirPids(L,length(L)).
 
-enviarPids(_,0) ->
+distribuirPids(_,0) ->
     ok;
-enviarPids(L,N) ->
+distribuirPids(L,N) ->
     P = lists:nth(N,L),
     P ! {listwork, lists:filter(fun(A) -> A /= P end, L)},
-    enviarPids(L,N-1).
+    distribuirPids(L,N-1).

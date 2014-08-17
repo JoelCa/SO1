@@ -1,4 +1,4 @@
-SO1 2014
+SO1 2013
 ========
 
-TP final
+Sistemas de archivos distribuido.
