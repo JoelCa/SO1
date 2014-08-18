@@ -72,7 +72,7 @@ proc_socket(ClientS,T,{W,ID},List) ->
                         X == "\r\n" ->
                             gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n");
                         true ->
-                            W ! {cre, X, self()},
+                            W ! {cre, X, ID, self()},
                             receive 
                                 {cre, ok} ->
                                     gen_tcp:send(ClientS, "OK\n");
