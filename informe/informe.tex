@@ -210,11 +210,14 @@ En Erlang, realizamos los siguientes puntos adicionales.
 %   
   \item Cerrar todos lo archivos abiertos por un cliente.
   
-  Para solucionarlo creamos una lista de tuplas de la forma \{\texttt{N},\texttt{M},\texttt{P}\}. Así interpretamos las variables:
+  Para solucionarlo creamos una lista de tuplas de la forma \{\texttt{N},\texttt{M},\texttt{I},\texttt{P}\}, para cada archivo.
+  
+  Así interpretamos las variables:
   
   \begin{itemize}
-    \item \texttt{N}: Atomo que tiene el nombre de un archivo.
+    \item \texttt{N}: Atomo con el nombre de un archivo.
     \item \texttt{M}: Atomo que denota el modo de apertura del archivo con nombre \texttt{N}.
+    \item \texttt{I}: Número que indica el \textit{file descriptor} del archivo.
     \item \texttt{P}: Pid del \textit{worker} que tiene el archivo \texttt{N}.
   \end{itemize}
   

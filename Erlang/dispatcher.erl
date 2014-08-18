@@ -5,8 +5,12 @@ inicio(Port,ListPids) ->
     {ok, ServerSocket} = gen_tcp:listen(Port,[{active,false}]),
     P1 = spawn (?MODULE, round, [ListPids, length(ListPids), 1, 0]),
     register(workerselector, P1),
-    P2 = spawn(?MODULE, descriptor,[[],1]),
-    register(desc, P2),
+    %% P2 = spawn(?MODULE, descriptor,[[],1]),
+    %% register(desc, P2),
+    P2 = spawn (?MODULE, fdSelector, [1]),
+    register(fdselector, P2),
+
+
     io:format("Servidor aceptando clientes\n"),
     serv(ServerSocket).
 
@@ -132,9 +136,9 @@ proc_socket(ClientS,T,{W,ID},List) ->
                                 {opn, error2} ->
                                     gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO EN MODO RDWR POR OTRO USUARIO\n"), proc_socket(ClientS, {W,ID}, List);
                                 {opn, P} ->
-                                    desc ! {des, ins, X, P, self()},
-                                    receive {des, I} -> gen_tcp:send(ClientS, lists:concat(["OK FD ",I,"\n"])) end,
-                                    proc_socket(ClientS, {W,ID}, [{X,M,P}|List])
+                                    fdselector ! {newfd, self()},
+                                    receive {fd, I} -> gen_tcp:send(ClientS, lists:concat(["OK FD ",I,"\n"])) end,
+                                    proc_socket(ClientS, {W,ID}, [{X,M,I,P}|List])
                             after 100 ->
                                     io:format("ERROR WORKER NO RESPONDE\n")
                             end;
@@ -148,22 +152,23 @@ proc_socket(ClientS,T,{W,ID},List) ->
                     gen_tcp:send(ClientS, "ERROR TAMAÑO INCORRECTO\n");
                 error2  ->
                     gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n");
-                error3 ->
-                    gen_tcp:send(ClientS, "ERROR FD INCORRECTO\n");
-                error4 ->
-                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO POR OTRO USUARIO\n");
-                {N,Size,P,S} ->
-                    {_,M,_} = lists:nth(1,lists:filter(fun({A,_,_}) -> A == N end, List)),
-                    if
-                        M == l ->
-                            gen_tcp:send(ClientS, "ERROR ARCHIVO ABIERTO EN MODO RDONLY\n");
-                        true ->
-                            W ! {wrt,N,Size,S,P,self()},
-                            receive
-                                {wrt, ok} ->
-                                    gen_tcp:send(ClientS,"OK\n")
-                            after 100 ->
-                                    io:format("ERROR WORKER NO RESPONDE\n")
+                {FD,Size,Buff} ->
+                    X = lists:filter(fun({_,_,A,_}) -> A == FD end, List),
+                    case X of
+                        [] ->
+                            gen_tcp:send(ClientS, "ERROR FD INCORRECTO\n");
+                        [{N,M,_,PidW}] ->
+                            if
+                                M == l ->
+                                    gen_tcp:send(ClientS, "ERROR ARCHIVO ABIERTO EN MODO RDONLY\n");
+                                true ->
+                                    W ! {wrt,N,Size,Buff,PidW,self()},
+                                    receive
+                                        {wrt, ok} ->
+                                            gen_tcp:send(ClientS,"OK\n")
+                                    after 100 ->
+                                            io:format("ERROR WORKER NO RESPONDE\n")
+                                    end
                             end
                     end
             end,
@@ -172,17 +177,21 @@ proc_socket(ClientS,T,{W,ID},List) ->
             case analizar(Tokens, rea) of
                 error2 ->
                     gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n");
-                error3 ->
-                    gen_tcp:send(ClientS, "ERROR FD INCORRECTO\n");
-                error4 ->
-                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO POR OTRO USUARIO\n");
-                {N,P,Size} ->
-                    W ! {rea,N,P,Size,self()},
-                    receive
-                        {rea,R,S} ->
-                            gen_tcp:send(ClientS, lists:concat(["OK SIZE ",S," ",R,"\n"]))
-                    after 100 ->
-                            io:format("ERROR WORKER NO RESPONDE\n")
+                {FD,Size} ->
+                    %io:format("valor REA antes ~p, fd ~p",[List, FD]),
+                    X = lists:filter(fun({_,_,A,_}) -> A == FD end, List),
+                    %io:format("valor REA despues ~p",[X]),
+                    case X of
+                        [] ->
+                            gen_tcp:send(ClientS, "ERROR FD INCORRECTO\n");
+                        [{N,_,_,PidW}] ->
+                            W ! {rea,N,PidW,Size,self()},
+                            receive
+                                {rea,R,S} ->
+                                    gen_tcp:send(ClientS, lists:concat(["OK SIZE ",S," ",R,"\n"]))
+                            after 100 ->
+                                    io:format("ERROR WORKER NO RESPONDE\n")
+                            end
                     end
             end,
             proc_socket(ClientS, {W,ID}, List);
@@ -196,22 +205,19 @@ proc_socket(ClientS,T,{W,ID},List) ->
                     FD = fst(string:to_integer(lists:nth(3,Tokens))),
                     if
                         is_integer(FD) and (FD > 0) and (X == "FD") ->
-                            case nd(FD,1) of
-                                error3 ->
+                            Y = lists:filter(fun({_,_,A,_}) -> A == FD end, List),
+                            case Y of
+                                [] ->
                                     gen_tcp:send(ClientS, "ERROR FD INCORRECTO\n"),
                                     proc_socket(ClientS, {W,ID}, List);
-                                error4 ->
-                                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO POR OTRO USUARIO\n"),
-                                    proc_socket(ClientS, {W,ID}, List);
-                                {N,P} ->
-                                    [{A,M,B}] = lists:filter(fun({A,_,_}) -> A == N end, List),
-                                    W ! {clo, N, M, P, self()},
+                                [{N,M,I,PidW}] ->
+                                    W ! {clo, N, M, PidW, self()},
                                     receive
                                         {clo, ok} -> gen_tcp:send(ClientS, "OK\n")
                                     after 100 ->
                                             io:format("ERROR WORKER NO RESPONDE\n")
                                     end,
-                                    proc_socket(ClientS, {W,ID}, List--[{A,M,B}])
+                                    proc_socket(ClientS, {W,ID}, List--[{N,M,I,PidW}])
                             end;
                         true  ->
                             gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"),
@@ -257,65 +263,13 @@ round(L, N, I, ID) ->
             round(L, N, (I rem N) + 1, ID +1)
     end.
 
-
-borrarDes(N,P,[{N,[{P,_}],_}|L]) ->
-    L;
-borrarDes(N,P,[{N,A,B}|L]) ->
-    [{N,lists:filter(fun({C,_}) -> P /= C end, A),B}|L];
-borrarDes(N,P,[A|L]) ->
-    [A|borrarDes(N,P,L)].
-
-                                                %"Buff" es una lista de tuplas {N, I, P}:
-                                                %-N corresponde al nombre del archivo.
-                                                %-I es una lista de tuplas {A, B}.
-                                                %   Donde A, es el pid del worker que tiene el archivo N abierto,
-                                                %   y B es el FD asociado.
-                                                %-P es el Pid del worker que tiene el archivo.
-                                                %En el 3º caso del receive, "Flag" es una bandera
-                                                %con el fin de identificar si es invocada por el operador CLO.
-                                                %La utilizamos para obtener los descriptores de los archivos,
-                                                %y el pid del worker que tiene un determinado archivo.
-descriptor(Buff, I) ->
-    receive 
-        {des, ins, N, P, Pid} ->
-            Pid ! {des, I},
-            X  = lists:filter(fun({A,_,_}) -> A == N end, Buff),
-            case X of
-                [] ->
-                    descriptor([{N,[{Pid,I}],P}|Buff],I+1);
-                _ ->
-                    descriptor(lists:map(fun({A,B,C}) -> if A == N -> {A,[{Pid,I}|B],C}; true -> {A,B,C} end end, Buff), I+1)
-            end;
-        {des, borrar, N, Pid} ->
-            X = borrarDes(N,Pid,Buff),
-            Pid ! {des,ok},
-            descriptor(X,I);
-        {des, Flag, FD, Pid} ->
-            X = lists:filter(fun({_,A,_}) -> B = lists:filter(fun({_,D}) -> D == FD end, A), if length(B)>0 -> true; true -> false end end, Buff),
-            case X of
-                []  ->
-                    Pid ! {des, error1}, descriptor(Buff,I);
-                [{Y,Z,W}] ->
-                    [{Z2,_}] = lists:filter(fun({_,A}) -> A == FD end, Z),
-                    if
-                        Pid ==   Z2 ->
-                            Pid ! {des, Y, W},
-                            if
-                                Flag == 1 ->
-                                    if
-                                        length(Z) == 1 ->
-                                            descriptor(Buff -- [{Y,Z,W}],I);
-                                        true ->
-                                            descriptor(borrarDes(Y,Z2,Buff), I)
-                                    end;
-                                true ->
-                                    descriptor(Buff,I)
-                            end;
-                        true ->
-                            Pid ! {des, error2}, descriptor(Buff,I)
-                    end
-            end
+fdSelector(N) ->
+    receive
+        {newfd, Pid} ->
+            Pid ! {fd, N},
+            fdSelector(N+1)
     end.
+
 
 analizar_opn(L) when length(L) /= 4 -> error1;
 analizar_opn([_,_,_,"\r\n"]) -> error1;
@@ -344,12 +298,7 @@ analizar([_,"FD", X, "SIZE", Y], rea) ->
     Size = fst(string:to_integer((Y -- "\r\n"))),
     if
         is_integer(FD) and is_integer(Size) and (FD > 0) and (Size >= 0)->
-            case nd(FD,0) of
-                {N,P} ->
-                    {N,P,Size};
-                E ->
-                    E
-            end;
+            {FD,Size};
         true ->
             error2
     end;
@@ -366,12 +315,7 @@ analizar([_,"FD", X, "SIZE",Y|Z], wrt) ->
                 (Size > 0) and (Buff == []) ->
                     error2;
                 Size == length(Buff) ->
-                    case nd(FD,0) of
-                        {N,P} ->
-                            {N,Size,P,Buff};
-                        E ->
-                            E
-                    end;
+                    {FD,Size,Buff};
                 true ->
                     error1
             end;
@@ -380,22 +324,10 @@ analizar([_,"FD", X, "SIZE",Y|Z], wrt) ->
     end;
 analizar(_,wrt) -> error2.
 
-                                                %"nd" obtiene el nombre y pid asociado al descriptor FD.
-                                                %Invocada por "analizar", y por el op. CLO.
-nd(FD,Flag) ->
-    desc ! {des, Flag, FD, self()},
-    receive
-        {des, error1}->
-            error3;
-        {des, error2} ->
-            error4;
-        {des, N, P}->
-            {N,P}
-    end.
 
 salir([]) ->
     ok;
-salir([{N,M,P}|L]) ->
+salir([{N,M,_,P}|L]) ->
     P ! {clo,N,M,P, self()},
     receive {clo,ok} ->
             desc ! {des,borrar,N,self()},
