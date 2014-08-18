@@ -85,7 +85,7 @@ proc_socket(ClientS,T,{W,ID},List) ->
             end,
             proc_socket(ClientS, {W,ID}, List);
         "LSD\r\n"->
-            W ! {lsd, self()},
+            W ! {lsd, ID, self()},
             receive
                 {lsd, X} ->
                     gen_tcp:send(ClientS, lists:concat(["OK",X]))
@@ -103,7 +103,7 @@ proc_socket(ClientS,T,{W,ID},List) ->
                         X == "\r\n" ->
                             gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n");
                         true ->
-                            W ! {del, X, self()},
+                            W ! {del, X, ID, self()},
                             receive
                                 {del,ok} ->
                                     gen_tcp:send(ClientS, "OK\n");
@@ -125,7 +125,7 @@ proc_socket(ClientS,T,{W,ID},List) ->
                     Y = lists:filter(fun({A,_,_}) -> A == X end, List),
                     case Y of
                         [] ->
-                            W ! {opn, X, M, self()},
+                            W ! {opn, X, M, ID, self()},
                             receive
                                 {opn, error1} ->
                                     gen_tcp:send(ClientS, "ERROR EL ARCHIVO NO EXISTE\n"), proc_socket(ClientS, {W,ID}, List);
@@ -228,7 +228,7 @@ proc_socket(ClientS,T,{W,ID},List) ->
                         X == "\r\n" ->
                             gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n");
                         true ->
-                            W ! {rm, X, self()},
+                            W ! {rm, X, ID, self()},
                             receive
                                 {rm,ok} ->
                                     gen_tcp:send(ClientS, "OK\n");

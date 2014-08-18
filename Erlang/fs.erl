@@ -32,18 +32,11 @@ crearfs() ->
 
 fs(Buff,LW,LWLength,Processing) ->
     receive
+                                                %CRE
         {cre,N,ID,Pid}->
-            enviarM({msj, cre, N, ID, self()},LW),
+            enviarMsj({msj, cre, N, ID, self()},LW),
             fs(Buff,LW,LWLength,[{ID, {cre, N, Pid}, [], 0}|Processing]);
-        {rmsj,ID, X} ->
-            io:format("tenemos: ~p ~p\n",[ID,X]),
-            case addReply({ID, X},Processing,LWLength) of
-                {ok,Proce,Resp,P} ->
-                    applyOperator(P,Resp,Buff,LW,LWLength,Proce);
-                {foul, Proce} ->
-                    io:format("llego!!\n"),
-                    fs(Buff,LW,LWLength,Proce)
-            end;
+
         {msj,cre,N,ID,PW} -> 
             case busca(N,Buff) of
                 false ->
@@ -53,111 +46,123 @@ fs(Buff,LW,LWLength,Processing) ->
             end,
             fs(Buff,LW,LWLength,Processing);
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        {lsd,Pid} ->
-            X = enviarMsj({msj, lsd, self()},LW),
-            Y = lists:concat([X,lists:map(fun({_,{_,A},_}) -> [$ |A] -- "\r\n" end, Buff),"\n"]),
-            Pid ! {lsd, Y},
-            fs(Buff,LW,LWLength,Processing);
-        {msj,lsd,PW} ->
+                                                %LSD
+        {lsd,ID,Pid} ->
+            enviarMsj({msj, lsd, ID, self()},LW),
+            fs(Buff,LW,LWLength,[{ID, {lsd, Pid}, [], 0}|Processing]);
+
+        {msj,lsd,ID,PW} ->
             X = lists:map(fun({_,{_,A},_}) -> [$ |A] -- "\r\n" end, Buff),
             Y = lists:append(X),
-            PW ! {rmsj, Y}, fs(Buff,LW,LWLength,Processing);
-        {del,N,Pid} ->
+            PW ! {rmsj, ID, Y}, fs(Buff,LW,LWLength,Processing);
+
+                                                %DEL
+        {del,N,ID,Pid} ->
             case bb(N,Buff) of
                 {_,error1} ->
-                    X = enviarMsj({msj, del, N, self()},LW),
-                    Y = lists:filter(fun(A) ->A /= error1 end, X),
-                    case Y of
-                        [] ->
-                            Pid ! {del, error1}, fs(Buff,LW,LWLength,Processing);
-                        [Z] ->
-                            Pid ! {del, Z}, fs(Buff,LW,LWLength,Processing)
-                    end;
+                    enviarMsj({msj, del, N, ID, self()},LW),
+                    fs(Buff,LW,LWLength,[{ID, {del,N,Pid}, [], 0}|Processing]);
                 {B,E} ->
                     Pid ! {del, E}, fs(B,LW,LWLength,Processing)
             end;
-        {msj,del,N,PW} ->
+
+        {msj,del,N,ID,PW} ->
             case bb(N,Buff) of
                 {X,ok} ->
-                    PW ! {rmsj, ok}, fs(X,LW,LWLength,Processing);
+                    PW ! {rmsj, ID, ok}, fs(X,LW,LWLength,Processing);
                 {_,Y} ->
-                    PW ! {rmsj, Y}, fs(Buff,LW,LWLength,Processing)
+                    PW ! {rmsj, ID, Y}, fs(Buff,LW,LWLength,Processing)
             end;
-        {opn,N,M,Pid} ->
+
+                                                %OPN
+        {opn,N,M,ID,Pid} ->
             case abrir(N,M,Pid,Buff) of
                 {_, error1}->      
-                    X = enviarMsj({msj,opn,N,M,Pid,self()},LW),
-                    Y = lists:filter(fun(A) -> A /= error1 end, X),
-                    case Y of
-                        [] ->
-                            Pid ! {opn, error1}, fs(Buff,LW,LWLength,Processing);
-                        [P] ->
-                            Pid ! {opn, P}, fs(Buff,LW,LWLength,Processing)
-                    end;
+                    enviarMsj({msj,opn,N,M,Pid,ID,self()},LW),
+                    fs(Buff,LW,LWLength,[{ID, {opn,N,M,Pid}, [], 0}|Processing]);
                 {B,E} ->
                     Pid ! {opn, E}, fs(B,LW,LWLength,Processing)
             end;
-        {msj,opn,N,M,Pid,PW} ->
+
+        {msj,opn,N,M,Pid,ID,PW} ->
             case abrir(N,M,Pid,Buff) of
-                {B, E} -> PW ! {rmsj, E}, fs(B,LW,LWLength,Processing)
+                {B, E} -> PW ! {rmsj, ID, E}, fs(B,LW,LWLength,Processing)
             end;
+
+
+                                                %WRT
         {wrt,N,Size,S,P,Pid} when P == self()->
             X = lists:map(fun({A,{B,C},{D,E,F,G}}) -> if C == N -> {A,{B,C},{D,E++S,F,G+Size}}; true -> {A,{B,C},{D,E,F,G}} end end, Buff),
             Pid ! {wrt, ok},
             fs(X,LW,LWLength,Processing);
+
         {wrt,N,Size,S,P,Pid} ->
             P ! {msj,wrt,N,Size,S,self()},
             receive {msj, wrt, ok} -> Pid ! {wrt, ok} end, fs(Buff,LW,LWLength,Processing);
+
         {msj,wrt,N,Size,S,Pid} ->
             X = lists:map(fun({A,{B,C},{D,E,F,G}}) -> if C == N -> {A,{B,C},{D,E++S,F,G+Size}}; true -> {A,{B,C},{D,E,F,G}} end end, Buff),
             Pid ! {msj, wrt, ok},
             fs(X,LW,LWLength,Processing);
+
+                                                %REA
         {rea,N,P,Size,Pid} when P == self()->
             {B,R,S} = br(N,Size,Pid,Buff),
             Pid ! {rea, R, S},
             fs(B,LW,LWLength,Processing);
+
         {rea,N,P,Size,Pid} ->
             P ! {msj,rea,Pid,N,Size,self()},
             receive {msj,rea,R,S} -> Pid ! {rea,R,S} end,
             fs(Buff,LW,LWLength,Processing);
+
         {msj,rea,P,N,Size,Pid} ->
             {B,R,S} = br(N,Size,P,Buff),
             Pid ! {msj,rea,R,S},
             fs(B,LW,LWLength,Processing);
+
+                                                %CLO
         {clo,N,M,P,Pid} when P == self()->
             X = cob(N,M,Pid,Buff),
             Pid ! {clo,ok},
             fs(X,LW,LWLength,Processing);
+
         {clo,N,M,P,Pid} ->
             P ! {msj, clo, N, M, Pid, self()},
             receive {msj,clo,ok} -> Pid ! {clo,ok} end,
             fs(Buff,LW,LWLength,Processing);
+
         {msj,clo,N,M,P,Pid} ->
             X = cob(N,M,P,Buff),
             Pid ! {msj,clo,ok},
             fs(X,LW,LWLength,Processing);
-        {rm,N,Pid} ->
+
+                                                %RM
+        {rm,N,ID,Pid} ->
             case brm(N,Buff) of
                 {_,error1} ->
-                    X = enviarMsj({msj, rm, N, self()},LW),
-                    Y = lists:filter(fun(A) -> A /= error1 end, X),
-                    case Y of
-                        [] ->
-                            Pid ! {rm, error1}, fs(Buff,LW,LWLength,Processing);
-                        [Z] ->
-                            Pid ! {rm, Z}, fs(Buff,LW,LWLength,Processing)
-                    end;
+                    enviarMsj({msj, rm, N, ID, self()},LW),
+                    fs(Buff,LW,LWLength,[{ID, {rm,N,Pid}, [], 0}|Processing]);
                 {B,E} ->
                     Pid ! {rm, E}, fs(B,LW,LWLength,Processing)
 
             end;
-        {msj,rm,N,PW} ->
+
+        {msj,rm,N,ID,PW} ->
             case brm(N,Buff) of
                 {B,ok} ->
-                    PW ! {rmsj, ok}, fs(B,LW,LWLength,Processing);
+                    PW ! {rmsj, ID, ok}, fs(B,LW,LWLength,Processing);
                 {_,Y} ->
-                    PW ! {rmsj, Y}, fs(Buff,LW,LWLength,Processing)
+                    PW ! {rmsj, ID, Y}, fs(Buff,LW,LWLength,Processing)
+            end;
+
+        {rmsj,ID, X} ->
+            case addReply({ID, X},Processing,LWLength) of
+                {ok,Proce,Resp,P} ->
+                    io:format("Tiene: ~p ~p\n",[P,Proce]),
+                    reply(P,Resp,Buff,LW,LWLength,Proce);
+                {foul, Proce} ->
+                    fs(Buff,LW,LWLength,Proce)
             end;
         _  -> 
             fs(Buff,LW,LWLength,Processing)
@@ -274,16 +279,18 @@ abrir(X,M,P,[Y|L]) ->
         {A,B} -> {[Y|A],B}
     end.
 
-                                                %enviarMsj envía una consulta M a los demás workers, y
-                                                %devuelve una lista con sus respuestas.
-enviarMsj(M,L) ->
-    enviarM(M,L),
+
+
+%%%%%
+enviarMsj2(M,L) ->
+    enviarMsj(M,L),
     recibirMsj(length(L)).
 
-enviarM(M,[P|L]) ->
+                                                %enviarMsj envía una consulta M a los demás workers
+enviarMsj(M,[P|L]) ->
     P ! M,
-    enviarM(M,L);
-enviarM(_,[]) ->
+    enviarMsj(M,L);
+enviarMsj(_,[]) ->
     ok.
 
 recibirMsj(0) -> [];
@@ -301,15 +308,14 @@ distribuirPids(L,N) ->
 
 
 %{ID, Pedido, Lista de resultados, La longitud de la esa lista}
-                                                %addReply, añade la respuesta a su lista de pedidos pendientes.
-                                                %En el caso que sea la última respuesta, elimina el pedido de su lista
+                                                %addReply, añade la respuesta a su lista de pedidos,
+                                                %si corresponde a algún pedido pendiente.
+                                                %En el caso que la respuesta sea la última, elimina el pedido de su lista.
 addReply(_,[],_) ->
     {foul,[]};
 addReply({ID, X},[{ID,Pedido,LP,M}|Processing],N) ->
-    io:format("llego a 1\n"),
     if
         M+1 < N ->
-            io:format("tenes: ~p",[[{ID,Pedido,[X|LP],M+1}|Processing]]),
             {foul,[{ID,Pedido,[X|LP],M+1}|Processing]};
         true ->
             {ok,Processing,[X|LP],Pedido}
@@ -322,14 +328,48 @@ addReply(Tuple,[X|Processing],N) ->
             {ok, [X|Proce], LP, P}
     end.
 
-%%TERMINAR
-applyOperator({cre,N,Pid},Resp,Buff,LW,LWLength,Processing) ->
-            Y = lists:filter(fun(A) -> A /= false end, Resp),
-            Z = busca(N,Buff),
-            if
-                (length(Y) > 0) or Z ->
-                    Pid ! {cre, error}, fs(Buff,LW,LWLength,Processing);
-                true ->
-                    Pid ! {cre, ok}, fs([{{cerrado, false},{nombre, N},{data, [],[],0}}|Buff],LW,LWLength,Processing)
-            end.
-    
+                                                %Aplica el operador que corresponde, luego obtener
+                                                %las respuestas de los otros workers
+
+reply({cre,N,Pid},Resp,Buff,LW,LWLength,Processing) ->
+    Y = lists:filter(fun(A) -> A /= false end, Resp),
+    Z = busca(N,Buff),
+    if
+        (length(Y) > 0) or Z ->
+            Pid ! {cre, error}, fs(Buff,LW,LWLength,Processing);
+        true ->
+            Pid ! {cre, ok}, fs([{{cerrado, false},{nombre, N},{data, [],[],0}}|Buff],LW,LWLength,Processing)
+    end;
+
+reply({lsd,Pid},Resp,Buff,LW,LWLength,Processing) ->
+    Y = lists:concat([Resp,lists:map(fun({_,{_,A},_}) -> [$ |A] -- "\r\n" end, Buff),"\n"]),
+    Pid ! {lsd, Y},
+    fs(Buff,LW,LWLength,Processing);
+
+reply({del,_,Pid},Resp,Buff,LW,LWLength,Processing) ->
+    Y = lists:filter(fun(A) ->A /= error1 end, Resp),
+    case Y of
+        [] ->
+            Pid ! {del, error1}, fs(Buff,LW,LWLength,Processing);
+        [Z] ->
+            Pid ! {del, Z}, fs(Buff,LW,LWLength,Processing)
+    end;
+
+reply({opn,_,_,Pid},Resp,Buff,LW,LWLength,Processing) ->
+    Y = lists:filter(fun(A) -> A /= error1 end, Resp),
+    case Y of
+        [] ->
+            Pid ! {opn, error1}, fs(Buff,LW,LWLength,Processing);
+        [P] ->
+            Pid ! {opn, P}, fs(Buff,LW,LWLength,Processing)
+    end;
+
+reply({rm,_,Pid},Resp,Buff,LW,LWLength,Processing) ->
+    Y = lists:filter(fun(A) -> A /= error1 end, Resp),
+    case Y of
+        [] ->
+            Pid ! {rm, error1}, fs(Buff,LW,LWLength,Processing);
+        [Z] ->
+            Pid ! {rm, Z}, fs(Buff,LW,LWLength,Processing)
+    end.
+            
