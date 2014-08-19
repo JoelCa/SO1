@@ -5,12 +5,8 @@ inicio(Port,ListPids) ->
     {ok, ServerSocket} = gen_tcp:listen(Port,[{active,false}]),
     P1 = spawn (?MODULE, round, [ListPids, length(ListPids), 1, 0]),
     register(workerselector, P1),
-    %% P2 = spawn(?MODULE, descriptor,[[],1]),
-    %% register(desc, P2),
     P2 = spawn (?MODULE, fdSelector, [1]),
     register(fdselector, P2),
-
-
     io:format("Servidor aceptando clientes\n"),
     serv(ServerSocket).
 
@@ -122,11 +118,11 @@ proc_socket(ClientS,T,{W,ID},List) ->
             end,
             proc_socket(ClientS, {W,ID}, List);
         "OPN"  ->
-            case analizar_opn(Tokens) of
+            case analizar(Tokens,opn) of
                 error1 ->
                     gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, {W,ID}, List);
                 {M,X} ->
-                    Y = lists:filter(fun({A,_,_}) -> A == X end, List),
+                    Y = lists:filter(fun({A,_,_,_}) -> A == X end, List),
                     case Y of
                         [] ->
                             W ! {opn, X, M, ID, self()},
@@ -271,9 +267,12 @@ fdSelector(N) ->
     end.
 
 
-analizar_opn(L) when length(L) /= 4 -> error1;
-analizar_opn([_,_,_,"\r\n"]) -> error1;
-analizar_opn([_,X,M,Y]) ->
+                                                %"analizar" determina los errores y el nombre del archivo, si existe,
+                                                %para el pedido, dado en el 1º argumento, por los operadores WRT o REA.
+
+analizar(L,opn) when length(L) /= 4 -> error1;
+analizar([_,_,_,"\r\n"],opn) -> error1;
+analizar([_,X,M,Y],opn) ->
     if 
         X == "MODE" ->
             case M of
@@ -286,11 +285,7 @@ analizar_opn([_,X,M,Y]) ->
             end;
         true ->
             error1
-    end.
-
-                                                %"analizar" determina los posibles errores y el nombre del archivo, si existe,
-                                                %para el pedido, dado en el 1º argumento, por los operadores WRT o REA.
-
+    end;
 analizar(T, rea) when length(T) /= 5 -> error2;
 analizar([_,_,_,_,"\r\n"], rea) -> error2;
 analizar([_,"FD", X, "SIZE", Y], rea) -> 
@@ -329,10 +324,7 @@ salir([]) ->
     ok;
 salir([{N,M,_,P}|L]) ->
     P ! {clo,N,M,P, self()},
-    receive {clo,ok} ->
-            desc ! {des,borrar,N,self()},
-            receive {des, ok} -> salir(L) end
-    end.
+    salir(L).
 
 fst({X,_}) -> X.
 

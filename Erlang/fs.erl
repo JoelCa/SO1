@@ -97,14 +97,18 @@ fs(Buff,LW,LWLength,Processing) ->
             fs(X,LW,LWLength,Processing);
 
         {wrt,N,Size,S,P,Pid} ->
-            P ! {msj,wrt,N,Size,S,self()},
-            receive {msj, wrt, ok} -> Pid ! {wrt, ok} end, fs(Buff,LW,LWLength,Processing);
+            P ! {msj,wrt,N,Size,S,Pid,self()},
+            fs(Buff,LW,LWLength,Processing);
 
-        {msj,wrt,N,Size,S,Pid} ->
+        {msj, wrt, ok, Client} ->
+            Client ! {wrt, ok},
+            fs(Buff,LW,LWLength,Processing);
+
+        {msj,wrt,N,Size,S,Client,Pid} ->
             X = lists:map(fun({A,{B,C},{D,E,F,G}}) -> if C == N -> {A,{B,C},{D,E++S,F,G+Size}}; true -> {A,{B,C},{D,E,F,G}} end end, Buff),
-            Pid ! {msj, wrt, ok},
+            Pid ! {msj, wrt, ok, Client},
             fs(X,LW,LWLength,Processing);
-
+        
                                                 %REA
         {rea,N,P,Size,Pid} when P == self()->
             {B,R,S} = br(N,Size,Pid,Buff),
@@ -112,13 +116,17 @@ fs(Buff,LW,LWLength,Processing) ->
             fs(B,LW,LWLength,Processing);
 
         {rea,N,P,Size,Pid} ->
-            P ! {msj,rea,Pid,N,Size,self()},
-            receive {msj,rea,R,S} -> Pid ! {rea,R,S} end,
+            P ! {msj,rea,Pid,N,Size,Pid,self()},
+            %receive {msj,rea,R,S} -> Pid ! {rea,R,S} end,
             fs(Buff,LW,LWLength,Processing);
 
-        {msj,rea,P,N,Size,Pid} ->
+        {msj,rea,R,S,Client} ->
+            Client ! {rea,R,S},
+            fs(Buff,LW,LWLength,Processing);
+
+        {msj,rea,P,N,Size,Client,Pid} ->
             {B,R,S} = br(N,Size,P,Buff),
-            Pid ! {msj,rea,R,S},
+            Pid ! {msj,rea,R,S,Client},
             fs(B,LW,LWLength,Processing);
 
                                                 %CLO
@@ -129,12 +137,16 @@ fs(Buff,LW,LWLength,Processing) ->
 
         {clo,N,M,P,Pid} ->
             P ! {msj, clo, N, M, Pid, self()},
-            receive {msj,clo,ok} -> Pid ! {clo,ok} end,
+            %receive {msj,clo,ok} -> Pid ! {clo,ok} end,
+            fs(Buff,LW,LWLength,Processing);
+        
+        {msj,clo,ok,Client} ->
+            Client ! {clo,ok},
             fs(Buff,LW,LWLength,Processing);
 
         {msj,clo,N,M,P,Pid} ->
             X = cob(N,M,P,Buff),
-            Pid ! {msj,clo,ok},
+            Pid ! {msj,clo,ok,P},
             fs(X,LW,LWLength,Processing);
 
                                                 %RM
