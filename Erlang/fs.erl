@@ -28,8 +28,8 @@ crearfs() ->
             fs([],L,length(L),[])
     end.
 
-%"Procesando" es una lista de la forma {ID, Pedido, Lista de resultados, La longitud de la esa lista}
-
+                                                %"Processing" es una lista de tuplas de la forma:
+                                                %{ID, Pedido, Lista de resultados, La longitud de la esa lista}
 fs(Buff,LW,LWLength,Processing) ->
     receive
                                                 %CRE
@@ -176,7 +176,7 @@ fs(Buff,LW,LWLength,Processing) ->
                 {foul, Proce} ->
                     fs(Buff,LW,LWLength,Proce)
             end;
-        _  -> 
+        _  ->
             fs(Buff,LW,LWLength,Processing)
     end.
 
@@ -291,13 +291,6 @@ abrir(X,M,P,[Y|L]) ->
         {A,B} -> {[Y|A],B}
     end.
 
-
-
-%%%%%
-enviarMsj2(M,L) ->
-    enviarMsj(M,L),
-    recibirMsj(length(L)).
-
                                                 %enviarMsj envía una consulta M a los demás workers
 enviarMsj(M,[P|L]) ->
     P ! M,
@@ -305,11 +298,9 @@ enviarMsj(M,[P|L]) ->
 enviarMsj(_,[]) ->
     ok.
 
-recibirMsj(0) -> [];
-recibirMsj(N) -> receive {rmsj, X} -> [X|recibirMsj(N-1)] end.
-
                                                 %Envía a cada worker, los pids de los demás
-distribuirPids(L) -> distribuirPids(L,length(L)).
+distribuirPids(L) ->
+    distribuirPids(L,length(L)).
 
 distribuirPids(_,0) ->
     ok;
@@ -318,8 +309,6 @@ distribuirPids(L,N) ->
     P ! {listwork, lists:filter(fun(A) -> A /= P end, L)},
     distribuirPids(L,N-1).
 
-
-%{ID, Pedido, Lista de resultados, La longitud de la esa lista}
                                                 %addReply, añade la respuesta a su lista de pedidos,
                                                 %si corresponde a algún pedido pendiente.
                                                 %En el caso que la respuesta sea la última, elimina el pedido de su lista.
@@ -383,5 +372,4 @@ reply({rm,_,Pid},Resp,Buff,LW,LWLength,Processing) ->
             Pid ! {rm, error1}, fs(Buff,LW,LWLength,Processing);
         [Z] ->
             Pid ! {rm, Z}, fs(Buff,LW,LWLength,Processing)
-    end.
-            
+    end.   
