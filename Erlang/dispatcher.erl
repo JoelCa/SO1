@@ -1,54 +1,53 @@
 -module(dispatcher).
 -compile(export_all).
 
-inicio(Port,ListPids) ->
+iniciarDispatcher(Port,ListPidsWorkers) ->
     {ok, ServerSocket} = gen_tcp:listen(Port,[{active,false}]),
-    P1 = spawn (?MODULE, round, [ListPids, length(ListPids), 1, 0]),
-    register(workerselector, P1),
     P2 = spawn (?MODULE, fdSelector, [1]),
     register(fdselector, P2),
     io:format("Servidor aceptando clientes\n"),
-    serv(ServerSocket).
+    serv(ServerSocket, ListPidsWorkers, length(ListPidsWorkers), 1, 0).
 
-serv(ServerSocket) ->
+
+                                                % serv, mantiene una lista con los pids de los workers,
+                                                % con el fin de asignarlos a los procesos socket.
+                                                % Además, tiene un contador que será el ID del cliente.
+                                                % Los workers se asignan en ronda.
+serv(ServerSocket, ListPids, N, Index, ID) ->
     {ok, ClientSocket} = gen_tcp:accept(ServerSocket),
-    P = spawn (?MODULE, proc_socket, [ClientSocket,{sinworker,-1},[]]),
+    P = spawn (?MODULE, proc_socket, [ClientSocket,{sinworker,lists:nth(Index, ListPids),ID},[]]),
+    io:format("Posible proc. socket con ID ~p, y worker ~p\n", [ID,Index]),
     gen_tcp:controlling_process(ClientSocket, P),
-    serv(ServerSocket).
+    serv(ServerSocket, ListPids, N, (Index rem N) + 1, ID+1).
 
 proc_socket(ClientS,Tuple,List) ->
     case gen_tcp:recv(ClientS,0) of
         {ok, Bin} ->
-            proc_socket(ClientS,Bin,Tuple,List);
+            case Tuple of
+                {W,ID} ->
+                    proc_socket(ClientS,Bin,{W,ID},List);
+                {sinworker,_,_} ->
+                    proc_socket(ClientS,Bin,Tuple,List)
+            end;
         {error,closed} ->
             case Tuple of
-                {sinworker,_} ->
+                {sinworker,_,_} ->
                     ok;
-                {_, ID} -> 
+                {_,ID} -> 
                     salir(List),
                     io:format("<- Cliente con ID ~p desconectado\n", [ID])
-                    %% receive
-                    %%     {numworker, N} ->
-                    %%         io:format("Cliente desconectado: ID ~p\n", [N])
-                    %% end
             end
     end.
 
-
-proc_socket(ClientS,Bin,{sinworker,_},List) ->
+proc_socket(ClientS,Bin,{sinworker,W,ID},List) ->
     case string:sub_word(Bin,1) of
         "CON\r\n"->
-            workerselector ! {getworker, self()},
-            receive
-                {worker, P, X} ->
-                    gen_tcp:send(ClientS, lists:concat(["OK ID ",X, "\n"])),
-                    io:format("-> Cliente con ID ~p conectado\n", [X]),
-                    proc_socket(ClientS, {P,X}, List);
-                {workererror} ->
-                    gen_tcp:send(ClientS, "ERROR SERVIDOR SATURADO\n"), proc_socket(ClientS, sinworker, List)
-            end;
-        _ -> proc_socket(ClientS,{sinworker,-1},List)
+            gen_tcp:send(ClientS, lists:concat(["OK ID ",ID, "\n"])),
+            io:format("-> Cliente con ID ~p conectado\n", [ID]),
+            proc_socket(ClientS, {W,ID}, List);
+        _ -> proc_socket(ClientS,{sinworker,W,ID},List)
     end;
+
 proc_socket(ClientS,T,{W,ID},List) ->
     Tokens = string:tokens(T, " "),
     case lists:nth(1,Tokens) of
@@ -248,16 +247,17 @@ proc_socket(ClientS,T,{W,ID},List) ->
             gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, {W,ID}, List)
     end.
 
-                                                %round, mantiene una lista con los pids de los workers,
-                                                %para asociarlos con los procesos socket. Además mantiene
-                                                %un contador que será el ID del cliente.
-                                                %Los workers se asignan en ronda.
-round(L, N, I, ID) ->
-    receive
-        {getworker, Pid} ->
-            Pid ! {worker, lists:nth(I, L), ID},
-            round(L, N, (I rem N) + 1, ID +1)
-    end.
+                                                % round, mantiene una lista con los pids de los workers,
+                                                % con el fin de asignarlos a los procesos socket.
+                                                % Además, tiene un contador que será el ID del cliente.
+                                                % Los workers se asignan en ronda.
+%% round(L, N, I, ID) ->
+%%     receive
+%%         {getworker, Pid} ->
+%%             Pid ! {worker, lists:nth(I, L), ID},
+%%             round(L, N, (I rem N) + 1, ID +1)
+%%     end.
+
 
 fdSelector(N) ->
     receive
@@ -267,8 +267,8 @@ fdSelector(N) ->
     end.
 
 
-                                                %"analizar" determina los errores y el nombre del archivo, si existe,
-                                                %para el pedido, dado en el 1º argumento, por los operadores WRT o REA.
+                                                % "analizar" determina pisibles errores para las operaciones
+                                                % WRT, REA, y OPN.
 
 analizar(L,opn) when length(L) /= 4 -> error1;
 analizar([_,_,_,"\r\n"],opn) -> error1;
@@ -286,6 +286,7 @@ analizar([_,X,M,Y],opn) ->
         true ->
             error1
     end;
+
 analizar(T, rea) when length(T) /= 5 -> error2;
 analizar([_,_,_,_,"\r\n"], rea) -> error2;
 analizar([_,"FD", X, "SIZE", Y], rea) -> 
@@ -297,6 +298,7 @@ analizar([_,"FD", X, "SIZE", Y], rea) ->
         true ->
             error2
     end;
+
 analizar(_,rea) -> error2;
 analizar(T, wrt) when length(T) < 5 -> error2;
 analizar([_,_,_,_,_,"\r\n"], wrt) -> error2;
@@ -327,12 +329,3 @@ salir([{N,M,_,P}|L]) ->
     salir(L).
 
 fst({X,_}) -> X.
-
-numero(P,L) -> numero(P,L,1).
-
-numero(P,[{P,_}|_],N) ->
-    N;
-numero(P,[_|L],N) ->
-    numero(P,L,N+1);
-numero(_,[],_) ->
-    error.
