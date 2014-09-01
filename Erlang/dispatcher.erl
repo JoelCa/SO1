@@ -3,8 +3,6 @@
 
 iniciarDispatcher(Port,ListPidsWorkers) ->
     {ok, ServerSocket} = gen_tcp:listen(Port,[{active,false}]),
-    P2 = spawn (?MODULE, fdSelector, [1]),
-    register(fdselector, P2),
     io:format("Servidor aceptando clientes\n"),
     serv(ServerSocket, ListPidsWorkers, length(ListPidsWorkers), 1, 0).
 
@@ -16,7 +14,7 @@ iniciarDispatcher(Port,ListPidsWorkers) ->
 serv(ServerSocket, ListPids, N, Index, ID) ->
     {ok, ClientSocket} = gen_tcp:accept(ServerSocket),
     P = spawn (?MODULE, proc_socket, [ClientSocket,{sinworker,lists:nth(Index, ListPids),ID},[]]),
-    io:format("Posible proc. socket con ID ~p, y worker ~p\n", [ID,Index]),
+    io:format("Posible proc. socket con ID ~p, y worker ~p, y pid del worker ~p\n", [ID,Index,lists:nth(Index, ListPids)]),
     gen_tcp:controlling_process(ClientSocket, P),
     serv(ServerSocket, ListPids, N, (Index rem N) + 1, ID+1).
 
@@ -24,16 +22,16 @@ proc_socket(ClientS,Tuple,List) ->
     case gen_tcp:recv(ClientS,0) of
         {ok, Bin} ->
             case Tuple of
-                {W,ID} ->
-                    proc_socket(ClientS,Bin,{W,ID},List);
                 {sinworker,_,_} ->
+                    proc_socket(ClientS,Bin,Tuple,List);
+                _ ->
                     proc_socket(ClientS,Bin,Tuple,List)
             end;
         {error,closed} ->
             case Tuple of
                 {sinworker,_,_} ->
                     ok;
-                {_,ID} -> 
+                {_,ID,_} -> 
                     salir(List),
                     io:format("<- Cliente con ID ~p desconectado\n", [ID])
             end
@@ -44,23 +42,22 @@ proc_socket(ClientS,Bin,{sinworker,W,ID},List) ->
         "CON\r\n"->
             gen_tcp:send(ClientS, lists:concat(["OK ID ",ID, "\n"])),
             io:format("-> Cliente con ID ~p conectado\n", [ID]),
-            proc_socket(ClientS, {W,ID}, List);
+            proc_socket(ClientS, {W,ID,1}, List);
         _ -> proc_socket(ClientS,{sinworker,W,ID},List)
     end;
 
-proc_socket(ClientS,T,{W,ID},List) ->
+proc_socket(ClientS,T,{W,ID,FCounter},List) ->
     Tokens = string:tokens(T, " "),
     case lists:nth(1,Tokens) of
         "CON\r\n" ->
-            gen_tcp:send(ClientS, "ERROR YA ESTA CONECTADO\n"), proc_socket(ClientS, {W,ID},List);
+            gen_tcp:send(ClientS, "ERROR YA ESTA CONECTADO\n"), proc_socket(ClientS, {W,ID,FCounter},List);
+
         "BYE\r\n" ->
             salir(List),
             gen_tcp:send(ClientS, "OK\n"),
             gen_tcp:close(ClientS),
-            receive
-                {numworker, N} ->
-                    io:format("Cliente desconectado: worker nº ~p\n", [N])
-            end;
+            io:format("<- Cliente con ID ~p desconectado\n", [ID]);
+
         "CRE"  ->
              if
                 length(Tokens) > 2  ->
@@ -82,7 +79,8 @@ proc_socket(ClientS,T,{W,ID},List) ->
                             end
                     end
             end,
-            proc_socket(ClientS, {W,ID}, List);
+            proc_socket(ClientS, {W,ID,FCounter}, List);
+
         "LSD\r\n"->
             W ! {lsd, ID, self()},
             receive
@@ -91,7 +89,8 @@ proc_socket(ClientS,T,{W,ID},List) ->
             after 100 ->
                     io:format("ERROR WORKER NO RESPONDE\n")
             end,
-            proc_socket(ClientS, {W,ID}, List);
+            proc_socket(ClientS, {W,ID,FCounter}, List);
+
         "DEL"  ->
             if
                 length(Tokens) > 2 ->
@@ -115,11 +114,12 @@ proc_socket(ClientS,T,{W,ID},List) ->
                             end
                     end
             end,
-            proc_socket(ClientS, {W,ID}, List);
+            proc_socket(ClientS, {W,ID,FCounter}, List);
+
         "OPN"  ->
             case analizar(Tokens,opn) of
                 error1 ->
-                    gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, {W,ID}, List);
+                    gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, {W,ID,FCounter}, List);
                 {M,X} ->
                     Y = lists:filter(fun({A,_,_,_}) -> A == X end, List),
                     case Y of
@@ -127,20 +127,24 @@ proc_socket(ClientS,T,{W,ID},List) ->
                             W ! {opn, X, M, ID, self()},
                             receive
                                 {opn, error1} ->
-                                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO NO EXISTE\n"), proc_socket(ClientS, {W,ID}, List);
+                                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO NO EXISTE\n"),
+                                    proc_socket(ClientS, {W,ID,FCounter}, List);
                                 {opn, error2} ->
-                                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO EN MODO RDWR POR OTRO USUARIO\n"), proc_socket(ClientS, {W,ID}, List);
+                                    gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO EN MODO RDWR POR OTRO USUARIO\n"),
+                                    proc_socket(ClientS, {W,ID,FCounter}, List);
                                 {opn, P} ->
-                                    fdselector ! {newfd, self()},
-                                    receive {fd, I} -> gen_tcp:send(ClientS, lists:concat(["OK FD ",I,"\n"])) end,
-                                    proc_socket(ClientS, {W,ID}, [{X,M,I,P}|List])
+                                    %fdselector ! {newfd, self()},
+                                    %receive {fd, I} -> gen_tcp:send(ClientS, lists:concat(["OK FD ",I,"\n"])) end,
+                                    gen_tcp:send(ClientS, lists:concat(["OK FD ",FCounter,"\n"])),
+                                    proc_socket(ClientS, {W,ID,FCounter+1}, [{X,M,FCounter,P}|List])
                             after 100 ->
                                     io:format("ERROR WORKER NO RESPONDE\n")
                             end;
                         _ ->
-                            gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO\n"), proc_socket(ClientS, {W,ID}, List)
+                            gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO\n"), proc_socket(ClientS, {W,ID,FCounter}, List)
                     end
             end;
+
         "WRT"  ->
             case analizar(Tokens, wrt) of
                 error1  ->
@@ -167,7 +171,8 @@ proc_socket(ClientS,T,{W,ID},List) ->
                             end
                     end
             end,
-            proc_socket(ClientS, {W,ID}, List);
+            proc_socket(ClientS, {W,ID,FCounter}, List);
+
         "REA"  ->
             case analizar(Tokens, rea) of
                 error2 ->
@@ -189,13 +194,14 @@ proc_socket(ClientS,T,{W,ID},List) ->
                             end
                     end
             end,
-            proc_socket(ClientS, {W,ID}, List);
+            proc_socket(ClientS, {W,ID,FCounter}, List);
+
         "CLO" ->
             X = lists:nth(2,Tokens),
             if
                 length(Tokens) /= 3  ->
                     gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"),
-                    proc_socket(ClientS, {W,ID}, List);
+                    proc_socket(ClientS, {W,ID,FCounter}, List);
                 true ->
                     FD = fst(string:to_integer(lists:nth(3,Tokens))),
                     if
@@ -204,7 +210,7 @@ proc_socket(ClientS,T,{W,ID},List) ->
                             case Y of
                                 [] ->
                                     gen_tcp:send(ClientS, "ERROR FD INCORRECTO\n"),
-                                    proc_socket(ClientS, {W,ID}, List);
+                                    proc_socket(ClientS, {W,ID,FCounter}, List);
                                 [{N,M,I,PidW}] ->
                                     W ! {clo, N, M, PidW, self()},
                                     receive
@@ -212,13 +218,14 @@ proc_socket(ClientS,T,{W,ID},List) ->
                                     after 100 ->
                                             io:format("ERROR WORKER NO RESPONDE\n")
                                     end,
-                                    proc_socket(ClientS, {W,ID}, List--[{N,M,I,PidW}])
+                                    proc_socket(ClientS, {W,ID,FCounter}, List--[{N,M,I,PidW}])
                             end;
                         true  ->
                             gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"),
-                            proc_socket(ClientS, {W,ID}, List)
+                            proc_socket(ClientS, {W,ID,FCounter}, List)
                     end
             end;
+
         "RM" ->
             if
                 length(Tokens) > 2 ->
@@ -242,28 +249,11 @@ proc_socket(ClientS,T,{W,ID},List) ->
                             end
                     end
             end,
-            proc_socket(ClientS, {W,ID}, List);
+            proc_socket(ClientS, {W,ID,FCounter}, List);
+
         _  -> 
-            gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"), proc_socket(ClientS, {W,ID}, List)
-    end.
-
-                                                % round, mantiene una lista con los pids de los workers,
-                                                % con el fin de asignarlos a los procesos socket.
-                                                % Además, tiene un contador que será el ID del cliente.
-                                                % Los workers se asignan en ronda.
-%% round(L, N, I, ID) ->
-%%     receive
-%%         {getworker, Pid} ->
-%%             Pid ! {worker, lists:nth(I, L), ID},
-%%             round(L, N, (I rem N) + 1, ID +1)
-%%     end.
-
-
-fdSelector(N) ->
-    receive
-        {newfd, Pid} ->
-            Pid ! {fd, N},
-            fdSelector(N+1)
+            gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n"),
+            proc_socket(ClientS, {W,ID,FCounter}, List)
     end.
 
 
