@@ -252,7 +252,7 @@ proc_socket(ClientS,T,{W,ID,FCounter},List) ->
     end.
 
 
-                                                % "analizar" determina pisibles errores para las operaciones
+                                                % "analizar" determina posibles errores, para las operaciones
                                                 % WRT, REA, y OPN.
 
 analizar(L,opn) when length(L) /= 4 -> error1;
