@@ -196,7 +196,7 @@ void PS_operadorWRT(DescriptorColas *cola, long conn_s, int worker)
           }
         }
         else {
-          responder_al_cliente(conn_s, "ERROR EL ARCHIVO FUE ABIERTO POR OTRO USUARIO\n");
+          responder_al_cliente(conn_s, "ERROR FD INCORRECTO\n");
         }
       }
       break;
@@ -250,7 +250,7 @@ void PS_operadorREA(DescriptorColas *cola, long conn_s, int worker)
         liberar_msj(msj);
       }
       else {
-        responder_al_cliente(conn_s, "ERROR EL ARCHIVO FUE ABIERTO POR OTRO USUARIO\n");
+        responder_al_cliente(conn_s, "ERROR FD INCORRECTO\n");
       }
     }
   }
@@ -285,7 +285,7 @@ void PS_operadorCLO(DescriptorColas *cola, long conn_s, int worker)
         liberar_msj(msj);
       }
       else {
-        responder_al_cliente(conn_s, "ERROR EL ARCHIVO FUE ABIERTO POR OTRO USUARIO\n");
+        responder_al_cliente(conn_s, "ERROR FD INCORRECTO\n");
       }  
     }
   }
@@ -399,7 +399,6 @@ void *proceso_socket(void *arg)
   int res, worker;
   DescriptorColas *cola;
 
-  printf("Un nuevo cliente\n");
   while(1) {
     res=read(conn_s,pedido,MAXSIZE_TEXT);
     if (res<=0) {
@@ -408,7 +407,7 @@ void *proceso_socket(void *arg)
     }
     pedido[res]='\0';
     if((worker = iniciar_conexion(pedido, conn_s)) >= 0) {
-      printf("Cliente conectado: ID %d\n",worker);
+      printf("-> Cliente con ID %d conectado\n", worker);
       cola = nueva_cola_mensaje(worker, 'd');
       sprintf(cola_w, "/cola%d", worker);
       cola->worker = abrir(cola_w);
@@ -429,7 +428,7 @@ void *proceso_socket(void *arg)
       pthread_mutex_unlock(&m);
 
       borrar_cola_mensaje(cola, worker, 'd');
-      printf("Cliente desconectado: ID %d\n",worker);
+      printf("<- Cliente con ID %d desconectado\n",worker);
       break;
     }
   }

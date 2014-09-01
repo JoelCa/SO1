@@ -32,7 +32,7 @@ Este hilo también posee una cola de mensajes propia.
 Como muestra la Figura 1, cada \textit{worker} se comunica con los \textit{workers} adyacentes, y a lo sumo un proceso socket.
 
 Ante una llamada al sistema, el proceso socket, enviará la consulta a la cola de mensajes del \textit{worker} X, elegido pseudoaleatoriamente
-entre los \textit{workers} que estén desocupados.
+entre los \textit{workers} que están desocupados.
 Luego, el \textit{worker} X responderá al pedido, enviando el resultado a la cola de mensajes del proceso socket,
 previo a emitir un mensaje por el anillo, para consultar a los demás workers, si es necesario.
 
@@ -165,8 +165,7 @@ En Erlang, realizamos los siguientes puntos adicionales.
   \item Implementamos el operador \texttt{RM}, de la forma
   \texttt{RM ARG1}. El archivo \texttt{ARG1} será borrado una vez que ya no se mantenga abierto por ningún cliente.
   
-  \item Mensajería tolerante a fallas. Si un \textit{worker} no responde al proceso socket, o el proceso socket no atiende
-  al cliente, luego de aprox. 100 ms, el cliente recibirá el siguiente mensaje: \texttt{ERROR 62 ETIME}.
+  \item Si un \textit{worker} no responde al proceso socket, luego de aprox. 100 ms, el cliente recibirá el siguiente mensaje: \texttt{ERROR WORKER NO RESPONDE}.
  
 \end{itemize}
 
@@ -205,7 +204,7 @@ En Erlang, realizamos los siguientes puntos adicionales.
   \item Tamaño en bytes del buffer del punto 4.
 \end{enumerate}
 
-\subsection{Problemas y soluciones}
+\subsection{Problemas y posibles soluciones}
 
 \begin{enumerate}
 %   \item El caracter \texttt{'}$\backslash$\texttt{r} \texttt{'} que añade telnet en el fin de linea.

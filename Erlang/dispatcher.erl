@@ -14,7 +14,6 @@ iniciarDispatcher(Port,ListPidsWorkers) ->
 serv(ServerSocket, ListPids, N, Index, ID) ->
     {ok, ClientSocket} = gen_tcp:accept(ServerSocket),
     P = spawn (?MODULE, proc_socket, [ClientSocket,{sinworker,lists:nth(Index, ListPids),ID},[]]),
-    io:format("Posible proc. socket con ID ~p, y worker ~p, y pid del worker ~p\n", [ID,Index,lists:nth(Index, ListPids)]),
     gen_tcp:controlling_process(ClientSocket, P),
     serv(ServerSocket, ListPids, N, (Index rem N) + 1, ID+1).
 
@@ -133,8 +132,6 @@ proc_socket(ClientS,T,{W,ID,FCounter},List) ->
                                     gen_tcp:send(ClientS, "ERROR EL ARCHIVO ESTA ABIERTO EN MODO RDWR POR OTRO USUARIO\n"),
                                     proc_socket(ClientS, {W,ID,FCounter}, List);
                                 {opn, P} ->
-                                    %fdselector ! {newfd, self()},
-                                    %receive {fd, I} -> gen_tcp:send(ClientS, lists:concat(["OK FD ",I,"\n"])) end,
                                     gen_tcp:send(ClientS, lists:concat(["OK FD ",FCounter,"\n"])),
                                     proc_socket(ClientS, {W,ID,FCounter+1}, [{X,M,FCounter,P}|List])
                             after 100 ->
@@ -178,9 +175,7 @@ proc_socket(ClientS,T,{W,ID,FCounter},List) ->
                 error2 ->
                     gen_tcp:send(ClientS, "ERROR DE SINTAXIS\n");
                 {FD,Size} ->
-                    %io:format("valor REA antes ~p, fd ~p",[List, FD]),
                     X = lists:filter(fun({_,_,A,_}) -> A == FD end, List),
-                    %io:format("valor REA despues ~p",[X]),
                     case X of
                         [] ->
                             gen_tcp:send(ClientS, "ERROR FD INCORRECTO\n");
